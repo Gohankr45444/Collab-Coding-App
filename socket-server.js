@@ -9,7 +9,8 @@ const app = express();
 const http = require("http").createServer(app);
 
 // Configure Socket.IO with CORS settings to allow cross-origin requests
-const io = require("socket.io")(http, {
+const { Server } = require("socket.io");
+const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow connections from any origin
     methods: ["GET", "POST"], // Allow only GET and POST methods

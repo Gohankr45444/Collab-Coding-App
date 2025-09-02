@@ -50,7 +50,7 @@ const httpServer = createServer(app);
 // === Security Middleware ===
 app.use(
   cors({
-    origin: ["https://collab-coding-app-frontend.onrender.com", "http://localhost:3000"],
+    origin: ["https://collab-coding-app-frontend.onrender.com:3000", "http://localhost:3000"],
     methods: ["POST"],
   })
 );
@@ -99,13 +99,13 @@ app.use((req, res, next) => {
 // Configure Socket.IO with CORS and security options
 const io = new Server(httpServer, {
   cors: {
-    origin: ["https://collab-coding-app-frontend.onrender.com", "http://localhost:3000"],
+    origin: ["https://collab-coding-app-frontend.onrender.com:3000", "http://localhost:3000"],
     methods: ["GET", "POST"],
   },
   pingTimeout: 60000,
   maxHttpBufferSize: SECURITY_CONFIG.maxFileSize,
 });
-const PORT = 5000;
+const PORT = 3000;
 
 /**
  * Language-specific Package Management Configuration
@@ -1958,37 +1958,6 @@ function executeWithTimeout(command, timeout) {
 }
 
 app.use(cors());
-
-// Java language endpoint
-app.post("/run-java", async (req, res) => {
-  try {
-    const code = req.body.code;
-    const className = languageConfigs.java.detectClassName(code);
-    const filename = getTempFile("java");
-
-    // Write the code to a temporary file
-    fs.writeFileSync(filename, code);
-
-    try {
-      const result = await executeCode("java", code, filename);
-      res.json({ output: result });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    } finally {
-      cleanup([filename, filename.replace(".java", ".class")]);
-    }
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-// C language endpoint
-app.post("/run-c", (req, res) => handleCodeExecution("c", req.body.code, res));
-
-// C++ language endpoint
-app.post("/run-cpp", (req, res) =>
-  handleCodeExecution("cpp", req.body.code, res)
-);
 
 // Helper function to handle package installation and dependency management
 async function handleDependencies(language, code) {
