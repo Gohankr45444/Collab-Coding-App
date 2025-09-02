@@ -50,7 +50,7 @@ const httpServer = createServer(app);
 // === Security Middleware ===
 app.use(
   cors({
-    origin: ["https://collab-coding-app-frontend.onrender.com:3000", "http://localhost:3000"],
+    origin: ["https://collab-coding-app-frontend.onrender.com", "http://localhost:3000"],
     methods: ["POST"],
   })
 );
@@ -99,7 +99,7 @@ app.use((req, res, next) => {
 // Configure Socket.IO with CORS and security options
 const io = new Server(httpServer, {
   cors: {
-    origin: ["https://collab-coding-app-frontend.onrender.com:3000", "http://localhost:3000"],
+    origin: ["https://collab-coding-app-frontend.onrender.com", "http://localhost:3000"],
     methods: ["GET", "POST"],
   },
   pingTimeout: 60000,

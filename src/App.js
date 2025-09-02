@@ -3949,7 +3949,7 @@ function DSAProblemDetailPage({
     setLoading(true);
     setOutput("");
     try {
-      const endpoint = `https://collab-coding-app-frontend.onrender.com:3000/run-${language}`;
+      const endpoint = `https://collab-coding-app-frontend.onrender.com/run-${language}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

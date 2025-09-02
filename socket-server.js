@@ -10,9 +10,12 @@ const http = require("http").createServer(app);
 
 // Configure Socket.IO with CORS settings to allow cross-origin requests
 const { Server } = require("socket.io");
-const io = new Server(httpServer, {
+const io = new Server(http, {
   cors: {
-    origin: "*", // Allow connections from any origin
+        origin: [
+      "https://collab-coding-app-frontend.onrender.com",
+      "http://localhost:3001",
+    ],
     methods: ["GET", "POST"], // Allow only GET and POST methods
   },
 });
