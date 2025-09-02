@@ -349,7 +349,7 @@ const languageConfigs = {
       const defaultLibs = "-pthread"; // Common for threading
       return [
         `g++ ${defaultFlags} "${filename}" -o "${output}" ${defaultLibs}`,
-        process.platform === "win32" ? `"${output}"` : `./"${output}"`,
+        process.platform === "win32" ? `"${output}"` : `./${output}`,
       ];
     },
     timeout: {
@@ -396,7 +396,7 @@ const languageConfigs = {
       const defaultLibs = "-lm"; // Math library is commonly needed
       return [
         `gcc ${defaultFlags} "${filename}" -o "${output}" ${defaultLibs}`,
-        process.platform === "win32" ? `"${output}"` : `./"${output}"`,
+        process.platform === "win32" ? `"${output}"` : `./${output}`,
       ];
     },
     timeout: {
