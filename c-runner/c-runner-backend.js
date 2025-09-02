@@ -581,10 +581,19 @@ async function handleCodeExecution(language, code, res) {
         path.join(path.dirname(javaFile), `${className}.class`)
       ); // Add compiled class file to cleanup
     } else if (language === "cpp" || language === "c") {
-      const outputExe = getTempFile("exe");
-      filesToCleanup.push(outputExe); // Add executable to cleanup
-      const output = await executeCode(language, code, filename, outputExe);
-      return res.json({ output });
+      const exeExtension = process.platform === "win32" ? "exe" : "out";
+      const outputExe = getTempFile(exeExtension);
+      if (process.platform !== "win32") {
+        filesToCleanup.push(outputExe); // Add executable to cleanup
+        await executeWithTimeout(languageConfigs[language].compileCommand(filename, outputExe)[0], SECURITY_CONFIG.timeouts.compilation);
+        await executeWithTimeout(`chmod +x "${outputExe}"`, 1000); // Grant execute permissions
+        const output = await executeWithTimeout(languageConfigs[language].compileCommand(filename, outputExe)[1], SECURITY_CONFIG.timeouts.execution);
+        return res.json({ output });
+      }
+      else{
+        const output = await executeCode(language, code, filename, outputExe);
+        return res.json({ output });
+      }
     }
 
     const output = await executeCode(language, code, filename);
