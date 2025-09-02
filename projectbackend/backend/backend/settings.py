@@ -152,3 +152,5 @@ CSRF_TRUSTED_ORIGINS = [
 # For React integration (not for production)
 CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWS_CREDENTIALS = True
+
+

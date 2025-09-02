@@ -12,10 +12,7 @@ const http = require("http").createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(http, {
   cors: {
-        origin: [
-      "https://collab-coding-app-frontend.onrender.com",
-      "http://localhost:3001",
-    ],
+        origin: "*",
     methods: ["GET", "POST"], // Allow only GET and POST methods
   },
 });
