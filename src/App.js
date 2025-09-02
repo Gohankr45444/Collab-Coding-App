@@ -32,8 +32,7 @@ const socket = io("http://localhost:5000", {
 });
 */
 
-// const socket = io("https://collab-coding-app-dinesh.onrender.com", {
-const socket = io("http://localhost:5000", {
+const socket = io("https://collab-coding-app-dinesh.onrender.com", {
   reconnection: true,          // Enable auto-reconnection
   reconnectionDelay: 1000,     // Initial delay between attempts (1s)
   reconnectionDelayMax: 5000,  // Maximum delay between attempts (5s)
@@ -3950,7 +3949,7 @@ function DSAProblemDetailPage({
     setLoading(true);
     setOutput("");
     try {
-      const endpoint = `http://localhost:5000/run-${language}`;
+      const endpoint = `http://https://collab-coding-app-dinesh.onrender.com/run-${language}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
