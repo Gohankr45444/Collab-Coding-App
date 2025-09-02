@@ -63,7 +63,7 @@ export default function AuthPage({ onLogin, onSignup, onForgot }) {
 
     try {
       // Send login request to backend
-      const response = await fetch("http://127.0.0.1:8000/api/login/", {
+      const response = await fetch("https://collab-coding-app-dinesh.onrender.com/api/login/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -123,7 +123,7 @@ export default function AuthPage({ onLogin, onSignup, onForgot }) {
 
     try {
       // Send registration request to backend
-      const response = await fetch("http://127.0.0.1:8000/api/register/", {
+      const response = await fetch("https://collab-coding-app-dinesh.onrender.com/api/register/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -247,7 +247,7 @@ const CollaborationRoom = ({
     ]);
     try {
       // Execute code via service
-      const response = await fetch(`http://localhost:5000/run-${language}`, {
+      const response = await fetch(`https://collab-coding-app-dinesh.onrender.com/run-${language}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
