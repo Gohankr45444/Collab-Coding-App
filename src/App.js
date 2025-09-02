@@ -32,7 +32,8 @@ const socket = io("http://localhost:5000", {
 });
 */
 
-const socket = io("https://collab-coding-app-dinesh.onrender.com", {
+// const socket = io("https://collab-coding-app-dinesh.onrender.com", {
+const socket = io("http://localhost:5000", {
   reconnection: true,          // Enable auto-reconnection
   reconnectionDelay: 1000,     // Initial delay between attempts (1s)
   reconnectionDelayMax: 5000,  // Maximum delay between attempts (5s)
