@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-2-j#a)ne=@l=i8zk04@gbugkkvtyxcmje0hm-w5g6^k35vy-e!'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 # ALLOWED_HOSTS = ['collab-coding-app-dinesh.onrender.com', 'localhost', '127.0.0.1']
 ALLOWED_HOSTS = ['*']
