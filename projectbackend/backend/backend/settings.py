@@ -44,24 +44,8 @@ INSTALLED_APPS = [
     
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    # For production on Render
-    "https://collab-coding-app-frontend.onrender.com",
-    # For local development
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-# If you are using Django Rest Framework with CORS, also check CSRF_TRUSTED_ORIGINS
-CSRF_TRUSTED_ORIGINS = [
-    "https://collab-coding-app-frontend.onrender.com",
-]
-
-# For React integration (not for production)
-CORS_ALLOW_ALL_ORIGINS = True
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -70,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
 
  
 
@@ -148,3 +133,22 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+
+CORS_ALLOWED_ORIGINS = [
+    # For production on Render
+    "https://collab-coding-app-frontend.onrender.com",
+    # For local development
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# If you are using Django Rest Framework with CORS, also check CSRF_TRUSTED_ORIGINS
+CSRF_TRUSTED_ORIGINS = [
+    "https://collab-coding-app-frontend.onrender.com",
+]
+
+# For React integration (not for production)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWS_CREDENTIALS = True
