@@ -468,15 +468,14 @@ const packageManagerConfigs = {
  * Path to the Python interpreter
  * @constant {string} PYTHON_PATH - Absolute path to Python executable
  */
-const PYTHON_PATH =
-  "C:/Users/LENOVO/AppData/Local/Programs/Python/Python313/python.exe";
+// const PYTHON_PATH = "C:/Users/LENOVO/AppData/Local/Programs/Python/Python313/python.exe";
 
 /**
  * Java Development Kit Configuration
  * Automatically detects and configures Java environment settings
  */
-const JAVA_HOME = process.env.JAVA_HOME || findJavaHome();
-const JAVA_VERSION = process.env.JAVA_VERSION || "17"; // Default to Java 17
+// const JAVA_HOME = process.env.JAVA_HOME || findJavaHome();
+// const JAVA_VERSION = process.env.JAVA_VERSION || "17"; // Default to Java 17
 
 /**
  * Locates the Java Development Kit installation directory
@@ -485,30 +484,33 @@ const JAVA_VERSION = process.env.JAVA_VERSION || "17"; // Default to Java 17
  * @description Searches common installation locations across different operating systems
  *              Falls back to JAVA_HOME environment variable if no installation is found
  */
-function findJavaHome() {
-  // Define standard JDK installation paths for different operating systems
-  const commonPaths = [
-    "C:\\Program Files\\Java",         // Windows 64-bit
-    "C:\\Program Files (x86)\\Java",   // Windows 32-bit
-    "/usr/lib/jvm",                    // Linux
-    "/Library/Java/JavaVirtualMachines", // macOS
-  ];
 
-  for (const basePath of commonPaths) {
-    if (fs.existsSync(basePath)) {
-      const jdkDirs = fs
-        .readdirSync(basePath)
-        .filter((dir) => dir.includes("jdk"))
-        .sort()
-        .reverse(); // Get the latest version
-
-      if (jdkDirs.length > 0) {
-        return path.join(basePath, jdkDirs[0]);
-      }
-    }
-  }
-  return process.env.JAVA_HOME || "";
-}
+/*
+* function findJavaHome() {
+*   // Define standard JDK installation paths for different operating systems
+*   const commonPaths = [
+*     "C:\\Program Files\\Java",         // Windows 64-bit
+*     "C:\\Program Files (x86)\\Java",   // Windows 32-bit
+*     "/usr/lib/jvm",                    // Linux
+*     "/Library/Java/JavaVirtualMachines", // macOS
+*   ];
+* 
+*   for (const basePath of commonPaths) {
+*     if (fs.existsSync(basePath)) {
+*       const jdkDirs = fs
+*         .readdirSync(basePath)
+*         .filter((dir) => dir.includes("jdk"))
+*         .sort()
+*         .reverse(); // Get the latest version
+* 
+*       if (jdkDirs.length > 0) {
+*         return path.join(basePath, jdkDirs[0]);
+*       }
+*     }
+*   }
+*   return process.env.JAVA_HOME || "";
+* }
+*/
 
 /**
  * === Language-specific Configuration and Package Management ===
@@ -534,9 +536,9 @@ const languageConfigs = {
      * @throws {Error} If package installation fails or times out
      */
     install: async (pkg) => {
-      await executeWithTimeout(`"${PYTHON_PATH}" -m pip install ${pkg}`, 30000);
+      await executeWithTimeout(`python3 -m pip install --user ${pkg}`, 30000);
     },
-
+    
     /**
      * Detects required Python dependencies from source code
      * @param {string} code - Python source code to analyze
@@ -595,7 +597,7 @@ const languageConfigs = {
         .filter((pkg) => !stdLibs.has(pkg));
     },
     packageFile: "requirements.txt",
-    compileCommand: (filename) => `"${PYTHON_PATH}" "${filename}"`,
+    compileCommand: (filename) => `python3 "${filename}"`,
     timeout: 5000,
   },
   javascript: {
@@ -665,53 +667,6 @@ const languageConfigs = {
     compileCommand: (filename, className) => [
       `javac "${filename}"`,
       `java -cp "${path.dirname(filename)}" ${className}`,
-    ],
-    timeout: { compile: 5000, run: 3000 },
-  },
-  c: {
-    install: async (pkg) => {
-      await executeWithTimeout(`vcpkg install ${pkg}:x64-windows`, 30000);
-    },
-    detectDependencies: (code) => {
-      const includes = code.match(/#include\s*<([^>]+)>/g) || [];
-      const stdHeaders = new Set([
-        "stdio.h",
-        "stdlib.h",
-        "string.h",
-        "math.h",
-        "time.h",
-        "ctype.h",
-        "stdbool.h",
-        "stdint.h",
-        "limits.h",
-        "float.h",
-        "assert.h",
-        "errno.h",
-        "signal.h",
-        "locale.h",
-        "setjmp.h",
-        "stdarg.h",
-        "stddef.h",
-        "iso646.h",
-        "wchar.h",
-        "wctype.h",
-        "complex.h",
-        "fenv.h",
-        "inttypes.h",
-        "uchar.h",
-        "windows.h",
-        "process.h",
-        "direct.h",
-        "io.h",
-        "conio.h",
-      ]);
-      return includes
-        .map((inc) => inc.match(/<([^>]+)>/)[1].split("/")[0])
-        .filter((hdr) => !stdHeaders.has(hdr));
-    },
-    compileCommand: (filename, outputExe) => [
-      `gcc "${filename}" -o "${outputExe}"`,
-      `"${outputExe}"`,
     ],
     timeout: { compile: 5000, run: 3000 },
   },
@@ -1891,7 +1846,7 @@ const packageManagers = {
   },
 };
 
-app.use(express.json());
+// app.use(express.json());
 
 // Helper function to get temporary file path
 function getTempFile(ext) {
@@ -1963,7 +1918,14 @@ function executeWithTimeout(command, timeout) {
   });
 }
 
-app.use(cors());
+/*
+* app.use(cors(
+*   {
+*   origin: ["https://collab-coding-app-frontend.onrender.com", "http://localhost:3000"],
+*   methods: ["GET", "POST"],
+* }
+* ));
+*/
 
 // Helper function to handle package installation and dependency management
 async function handleDependencies(language, code) {
