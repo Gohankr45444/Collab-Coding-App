@@ -235,10 +235,9 @@ function createTempDir() {
 // Helper function to execute code with timeout
 function executeWithTimeout(command, timeout, input = "") {
   return new Promise((resolve, reject) => {
-    // Add maxBuffer to prevent memory explosion from huge outputs
     const child = exec(command, { timeout, killSignal: "SIGTERM", maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      // Trim very large outputs (safety net)
-      const MAX_OUTPUT = 5000; // character limit
+      // Trim very large outputs
+      const MAX_OUTPUT = 5000;
       if (stdout && stdout.length > MAX_OUTPUT) {
         stdout = stdout.slice(0, MAX_OUTPUT) + "\n...output truncated...";
       }
@@ -247,14 +246,13 @@ function executeWithTimeout(command, timeout, input = "") {
       }
 
       if (error) {
-        // Include stdout in rejection so compilation/runtime errors aren't lost
-        reject(stderr || stdout || error.message);
+        // Pass back BOTH stderr + stdout so compiler/runtime errors are visible
+        reject({ stdout, stderr, message: error.message });
       } else {
         resolve(stdout || stderr);
       }
     });
 
-    // Feed input to program if provided (for stdin)
     if (input) {
       child.stdin.write(input);
       child.stdin.end();
@@ -268,6 +266,7 @@ function executeWithTimeout(command, timeout, input = "") {
     });
   });
 }
+
 
 
 /**
@@ -351,7 +350,13 @@ async function handleCodeExecution(language, code, res, input = "") {
     res.json({ output });
   } catch (error) {
     console.error(`Execution error for ${language}:`, error);
-    res.json({ output: error.message || "An unknown error occurred." });
+
+    // If error includes stderr/stdout, show that instead of just error.message
+    if (typeof error === "object" && (error.stderr || error.stdout)) {
+      res.json({ output: (error.stderr || error.stdout || error.message) });
+    } else {
+      res.json({ output: error.message || "An unknown error occurred." });
+    }
   } finally {
     try {
       fs.rmSync(sandboxDir, { recursive: true, force: true });
@@ -360,6 +365,7 @@ async function handleCodeExecution(language, code, res, input = "") {
     }
   }
 }
+
 
 
 // --- Language-specific Endpoints ---
