@@ -5,7 +5,7 @@
  * and overall application state.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import AuthPage from "./AuthPage";
 import problemIcon from "./images/R2.png";
 import profileIcon from "./images/R1.jpg";
@@ -15,29 +15,14 @@ import AnimatedBackground from "./components/AnimatedBackground";
 import AnimatedLogo from "./components/AnimatedLogo";
 import "./styles/animations.css";
 
-/**
- * Socket.IO Configuration
- * Sets up real-time communication with the backend server
- * - Enables automatic reconnection
- * - Configures exponential backoff for reconnection attempts
- * - Limits maximum reconnection attempts
- */
+// Define the base URL for the socket server and the health check endpoint
+const SOCKET_SERVER_URL = "https://collab-coding-app-socket-server.onrender.com";
+const HEALTH_CHECK_URL = `${SOCKET_SERVER_URL}/health`; // Assuming a /health endpoint
 
-/**
-const socket = io("http://localhost:5000", {
-  reconnection: true,          // Enable auto-reconnection
-  reconnectionDelay: 1000,     // Initial delay between attempts (1s)
-  reconnectionDelayMax: 5000,  // Maximum delay between attempts (5s)
-  reconnectionAttempts: 5,     // Maximum number of reconnection attempts
-});
-*/
 
-const socket = io("https://collab-coding-app-socket-server.onrender.com", {
-  reconnection: true,          // Enable auto-reconnection
-  reconnectionDelay: 1000,     // Initial delay between attempts (1s)
-  reconnectionDelayMax: 5000,  // Maximum delay between attempts (5s)
-  reconnectionAttempts: 5,     // Maximum number of reconnection attempts
-});
+// Initialize socket outside the component, but don't connect immediately
+// We'll manage the connection manually after the health check
+let socket = null; 
 
 /**
  * Main App Component
@@ -265,7 +250,7 @@ export default function App() {
    * Handles system notifications and connection status
    */
   const [notifications, setNotifications] = useState([]);
-  const [isConnected, setIsConnected] = useState(socket.connected);
+  const [isConnected, setIsConnected] = useState(false); // Initialize as false, will be true after successful connect
   
   /**
    * Collaboration and Invitation Management
@@ -279,6 +264,9 @@ export default function App() {
 
   // Add a state to track reconnection attempts for better messaging
   const [reconnectionAttemptCount, setReconnectionAttemptCount] = useState(0);
+  
+    // Use a ref to store the socket instance, so it persists across renders
+  const socketRef = useRef(null);
 
   /**
    * Room Exit Handler
@@ -305,9 +293,9 @@ export default function App() {
    * - Maintains data consistency
    */
   const handleLeaveRoom = () => {
-    if (activeRoom) {
+    if (activeRoom && socketRef.current) {
       // Notify server about user leaving
-      socket.emit("leave-room", { roomId: activeRoom.roomId });
+      socketRef.current.emit("leave-room", { roomId: activeRoom.roomId });
       // Reset room state
       setActiveRoom(null);
     }
@@ -328,11 +316,13 @@ export default function App() {
    *   2. Updates invite status
    */
   const handleInviteResponse = (invite, accepted) => {
+    if (!socketRef.current) return; // Ensure socket exists
+    
     if (accepted) {
       // Generate unique room ID for the session
       const roomId = `room_${invite.id}`;
       // Notify sender of acceptance
-      socket.emit("accept-invite", {
+      socketRef.current.emit("accept-invite", {
         inviteId: invite.id,
         senderId: invite.senderId,
         title: invite.title,
@@ -340,9 +330,9 @@ export default function App() {
       });
 
       // Join the collaboration room
-      socket.emit("join-room", {
+      socketRef.current.emit("join-room", {
         roomId: roomId,
-        userId: socket.id,
+        userId: socketRef.current.id,
         username: "User",
         problemTitle: invite.title,
       });
@@ -353,7 +343,7 @@ export default function App() {
         )
       );
     } else {
-      socket.emit("reject-invite", {
+      socketRef.current.emit("reject-invite", {
         inviteId: invite.id,
         senderId: invite.senderId,
       });
@@ -413,317 +403,306 @@ export default function App() {
      * - Connection state tracking
      * - Event logging
      */
+     
+    let cleanupFunctions = []; // To store event listener cleanup
     
-    // Initial connection message
-    if (!socket.connected) {
-      setNotifications((prev) => [
-      ...prev,
-      { id: "initial-connect", message: "Connecting to server...", type: "info", dismissible: false },
-      ]);
-    }
-    
-    socket.on("connect", () => {
-      console.log("Connected to server");
-      setIsConnected(true);
-      setReconnectionAttemptCount(0); // Reset attempt count on successful connection
-      
-      // Clear any connection-related notifications
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== "initial-connect" && n.id !== "connection-error" && n.id !== "server-waking-up")
-      );
-      
-      // Add a success notification for connection
-      setNotifications((prev) => [
-        ...prev,
-        { id: Date.now(), message: "Successfully connected to server!", type: "success", dismissible: true },
-      ]);      
-      
-      // Register user in presence system
-      socket.emit("user_online", {
-        userId: "user-" + Date.now(),  // Unique temporary identifier
-        userName: "User",              // Default display name
-      });
-    });
-
-    /**
-     * Disconnection Handler
-     * Manages cleanup and state updates on connection loss
-     * 
-     * Actions:
-     * - Logs disconnect event
-     * - Updates connection state
-     * - Prepares for potential reconnection
-     */
-    socket.on("disconnect", () => {
-      console.log("Disconnected from server");
-      setIsConnected(false);
-      // Add a persistent notification for disconnection if not immediately reconnecting
-      setNotifications((prev) => [
-        ...prev,
-        { id: "connection-error", message: "Disconnected. Attempting to reconnect...", type: "error", dismissible: false },
-      ]);
-    });
-
-    /**
-     * Connection Error Handler
-     * Manages socket connection failures and error recovery
-     * 
-     * Features:
-     * 1. Error Logging
-     *    - Console output for debugging
-     *    - Error state tracking
-     * 
-     * 2. User Feedback
-     *    - Visual notifications
-     *    - Reconnection status updates
-     * 
-     * 3. Error Recovery
-     *    - Automatic reconnection attempts
-     *    - Error state cleanup
-     *    
-     * @param {Error} error - Socket.IO error object
-     * 
-     * Error Types Handled:
-     * - Network connectivity issues
-     * - Server unavailability
-     * - Authentication failures
-     * - Protocol mismatches
-     */
-    socket.on("connect_error", (error) => {
-      console.error("Connection error:", error);
-      setReconnectionAttemptCount((prev) => prev + 1);
-      // Remove previous error/waking up messages
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
-      );
-
-      let errorMessage = "Connection error. Retrying...";
-      if (reconnectionAttemptCount >= 2) { // After a couple of attempts, suggest server might be waking up
-        errorMessage = "Server might be waking up (Render free-tier). Retrying...";
-      }
-      
-      // Add user-friendly error notification to queue
+    const initializeSocket = async () => {
+      // Show initial connecting message
       setNotifications((prev) => [
         ...prev,
         {
-          id: "connection-error", // Use a consistent ID for this message to update it
-          message: errorMessage,
-          type: "error",
-          dismissible: false,
-        },
-      ]);
-    });
-    
-    socket.on("reconnect_attempt", (attemptNumber) => {
-      console.log(`Reconnection attempt ${attemptNumber}`);
-      setReconnectionAttemptCount(attemptNumber);
-
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
-      );
-      
-      let reconnectMessage = `Reconnection attempt ${attemptNumber}...`;
-      if (attemptNumber >= 2) {
-        reconnectMessage = `Server waking up... (attempt ${attemptNumber})`;
-      }
-
-      setNotifications((prev) => [
-        ...prev,
-        {
-          id: "server-waking-up", // Consistent ID for this
-          message: reconnectMessage,
+          id: "initial-connect",
+          message: "Warming up server and connecting...",
           type: "info",
           dismissible: false,
         },
       ]);
-    });
-    
-    socket.on("reconnect", (attemptNumber) => {
-      console.log(`Reconnected after ${attemptNumber} attempts`);
-      setIsConnected(true);
-      setReconnectionAttemptCount(0);
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
-      );
-      setNotifications((prev) => [
-        ...prev,
-        { id: Date.now(), message: `Reconnected!`, type: "success", dismissible: true },
-      ]);
-    });
-    
-    socket.on("reconnect_error", (error) => {
-      console.error("Reconnection error:", error);
-      // Display a more permanent error if all attempts fail
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
-      );
-      setNotifications((prev) => [
-        ...prev,
-        { id: "final-connection-error", message: "Failed to reconnect. Please refresh the page.", type: "error", dismissible: false },
-      ]);
-    });    
-
-    /**
-     * Room Management Handlers
-     * Handle events related to collaboration rooms
-     */
-    /**
-     * Room Join Handler
-     * Manages successful room join operations
-     * 
-     * @param {Object} data - Room join event data
-     * @param {string} data.roomId - Unique room identifier
-     * @param {string} data.username - Username of joining participant
-     * @param {string} data.problemTitle - Title of problem being collaborated on
-     * @param {Array} [data.users] - List of current room participants
-     * 
-     * Actions:
-     * 1. Creates success notification
-     * 2. Updates active room state
-     * 3. Initializes participant tracking
-     */
-    socket.on("room-joined", (data) => {
-      console.log("Joined room:", data);
-      const { roomId, username, problemTitle } = data;
       
-      // Create success notification with participant info
-      setNotifications((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          message: `${username} joined the room for problem: ${problemTitle}`,
-          type: "success",
-        },
-      ]);
-      
-      // Initialize room state with participant tracking
-      setActiveRoom({
-        roomId,
-        problemTitle,
-        participants: data.users || [],  // Initialize participants list
-      });
-    });
 
-    /**
-     * Invite Acceptance Handler
-     * Manages response when someone accepts our collaboration invite
-     * 
-     * Flow:
-     * 1. Receives acceptance confirmation
-     * 2. Extracts room details
-     * 3. Joins the collaboration room
-     * 4. Sets up for collaborative coding
-     * 
-     * @param {Object} data - Acceptance data
-     * @param {string} data.roomId - Unique room identifier
-     * @param {string} data.acceptedBy - ID of user who accepted
-     * @param {string} data.problemTitle - Title of problem to collaborate on
-     */
-    /**
-     * Invite Acceptance Handler
-     * Manages the workflow when an invite is accepted by another user
-     * 
-     * @param {Object} data - Acceptance event data
-     * @param {string} data.roomId - Collaboration room identifier
-     * @param {string} data.acceptedBy - ID of accepting user
-     * @param {string} data.problemTitle - Problem to collaborate on
-     * 
-     * Flow:
-     * 1. Validates acceptance data
-     * 2. Joins collaboration room
-     * 3. Initializes sender's environment
-     * 4. Sets up bidirectional communication
-     * 
-     * Notifications:
-     * - Logs acceptance for debugging
-     * - Updates room state for tracking
-     */
-    socket.on("invite-accepted", (data) => {
-      console.log("Invite accepted:", data);
-      const { roomId, acceptedBy, problemTitle } = data;
-      
-      // Initialize sender's room participation
-      socket.emit("join-room", {
-        roomId: roomId,
-        userId: socket.id,
-        username: "User",
-        problemTitle: problemTitle,
-      });
-    });
+      try {
+        // Step 1: Ping the health endpoint to wake up the server
+        console.log("Pinging server health endpoint...");
+        const healthResponse = await fetch(HEALTH_CHECK_URL);
 
-    /**
-     * Invitation Reception Handler
-     * Processes incoming collaboration invitations and manages the invite queue
-     * 
-     * Features:
-     * 1. Invitation data normalization
-     * 2. Queue management
-     * 3. Notification system
-     * 4. Auto-dismissal
-     * 
-     * @param {Object} data - Raw invitation data
-     * @param {string} data.title - Problem title
-     * @param {string} data.note - Optional message
-     * @param {string} data.sender - Sender's name
-     * @param {string} data.senderId - Sender's unique ID
-     * @param {string} data.problemId - Problem identifier
-     */
-    socket.on("receive-invite", (data) => {
-      console.log("Received invite:", data);
-      
-      // Normalize and structure the invitation data
-      const newInvite = {
-        id: Date.now(),                    // Unique identifier for this invite
-        title: data.title || "Untitled Problem",  // Fallback title
-        note: data.note || "Would you like to join this problem-solving session?",
-        sender: data.sender || "Anonymous", // Fallback sender name
-        senderId: data.senderId,
-        timestamp: new Date().toISOString(),
-        problemId: data.problemId,
-        status: "pending",                 // Initial invite status
-      };
-
-      // Store invite in history for tracking
-      setReceivedInvites((prev) => [...prev, newInvite]);
-
-      // Queue management with FIFO behavior
-      setInviteQueue((prev) => {
-        const newQueue = [...prev, newInvite];
-        // Show immediately if no other invite is displayed
-        if (!currentInvite) {
-          setCurrentInvite(newInvite);
-          setShowInvitePopup(true);
+        if (!healthResponse.ok) {
+          throw new Error(`Health check failed with status: ${healthResponse.status}`);
         }
-        return newQueue;
-      });
+        console.log("Server health check successful. Initializing Socket.IO...");
 
-      // Create and show temporary notification
-      const notificationId = Date.now();
-      setNotifications((prev) => [
-        ...prev,
-        {
-          id: notificationId,
-          message: `New invite from ${newInvite.sender}!`,
-          type: "invite",
-        },
-      ]);
+        // Remove the initial connection message once server is responsive
+        setNotifications((prev) =>
+          prev.filter((n) => n.id !== "initial-connect")
+        );
+        setNotifications((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            message: "Server responsive. Establishing connection...",
+            type: "info",
+            dismissible: true,
+          },
+        ]);
 
-      // Auto-dismiss notification after 5 seconds
-      setTimeout(() => {
-        setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
-      }, 5000);
-    });
+        // Step 2: Initialize and connect Socket.IO only after health check
+        /**
+        * Socket.IO Configuration
+        * Sets up real-time communication with the backend server
+        * - Enables automatic reconnection
+        * - Configures exponential backoff for reconnection attempts
+        * - Limits maximum reconnection attempts
+        */
+        socket = io(SOCKET_SERVER_URL, {
+          reconnection: true, // Enable auto-reconnection
+          reconnectionDelay: 1000, // Initial delay between attempts (1s)
+          reconnectionDelayMax: 5000, // Maximum delay between attempts (5s)
+          reconnectionAttempts: 5, // Maximum number of reconnection attempts
+        });
+        
+        socketRef.current = socket; // Store socket in ref
+
+        const onConnect = () => {
+          console.log("Connected to server");
+          setIsConnected(true);
+          setReconnectionAttemptCount(0); // Reset attempt count on successful connection
+
+          // Clear any connection-related notifications
+          setNotifications((prev) =>
+            prev.filter((n) => n.id !== "initial-connect" && n.id !== "connection-error" && n.id !== "server-waking-up")
+          );
+
+          // Add a success notification for connection
+          setNotifications((prev) => [
+            ...prev,
+            { id: Date.now(), message: "Successfully connected to server!", type: "success", dismissible: true },
+          ]);
+
+          // Register user in presence system
+          socket.emit("user_online", {
+            userId: "user-" + Date.now(), // Unique temporary identifier
+            userName: "User", // Default display name
+          });
+        };
+
+        const onDisconnect = () => {
+          console.log("Disconnected from server");
+          setIsConnected(false);
+          // Add a persistent notification for disconnection if not immediately reconnecting
+          setNotifications((prev) => [
+            ...prev,
+            { id: "connection-error", message: "Disconnected. Attempting to reconnect...", type: "error", dismissible: false },
+          ]);
+        };
+
+        const onConnectError = (error) => {
+          console.error("Connection error:", error);
+          setReconnectionAttemptCount((prev) => prev + 1);
+          // Remove previous error/waking up messages
+          setNotifications((prev) =>
+            prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+          );
+
+          let errorMessage = "Connection error. Retrying...";
+          if (reconnectionAttemptCount >= 2) { // After a couple of attempts, suggest server might be waking up
+            errorMessage = "Server might be waking up. Retrying...";
+          }
+
+          // Add user-friendly error notification to queue
+          setNotifications((prev) => [
+            ...prev,
+            {
+              id: "connection-error", // Use a consistent ID for this message to update it
+              message: errorMessage,
+              type: "error",
+              dismissible: false,
+            },
+          ]);
+        };
+
+        const onReconnectAttempt = (attemptNumber) => {
+          console.log(`Reconnection attempt ${attemptNumber}`);
+          setReconnectionAttemptCount(attemptNumber);
+
+          setNotifications((prev) =>
+            prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+          );
+
+          let reconnectMessage = `Reconnection attempt ${attemptNumber}...`;
+          if (attemptNumber >= 2) {
+            reconnectMessage = `Server waking up... (attempt ${attemptNumber})`;
+          }
+
+          setNotifications((prev) => [
+            ...prev,
+            {
+              id: "server-waking-up", // Consistent ID for this
+              message: reconnectMessage,
+              type: "info",
+              dismissible: false,
+            },
+          ]);
+        };
+
+        const onReconnect = (attemptNumber) => {
+          console.log(`Reconnected after ${attemptNumber} attempts`);
+          setIsConnected(true);
+          setReconnectionAttemptCount(0);
+          setNotifications((prev) =>
+            prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+          );
+          setNotifications((prev) => [
+            ...prev,
+            { id: Date.now(), message: `Reconnected!`, type: "success", dismissible: true },
+          ]);
+        };
+
+        const onReconnectError = (error) => {
+          console.error("Reconnection error:", error);
+          // Display a more permanent error if all attempts fail
+          setNotifications((prev) =>
+            prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+          );
+          setNotifications((prev) => [
+            ...prev,
+            { id: "final-connection-error", message: "Failed to reconnect. Please refresh the page.", type: "error", dismissible: false },
+          ]);
+        };
+
+        const onRoomJoined = (data) => {
+          console.log("Joined room:", data);
+          const { roomId, username, problemTitle } = data;
+
+          // Create success notification with participant info
+          setNotifications((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              message: `${username} joined the room for problem: ${problemTitle}`,
+              type: "success",
+            },
+          ]);
+
+          // Initialize room state with participant tracking
+          setActiveRoom({
+            roomId,
+            problemTitle,
+            participants: data.users || [], // Initialize participants list
+          });
+        };
+
+        const onInviteAccepted = (data) => {
+          console.log("Invite accepted:", data);
+          const { roomId, acceptedBy, problemTitle } = data;
+
+          // Initialize sender's room participation
+          socket.emit("join-room", {
+            roomId: roomId,
+            userId: socket.id,
+            username: "User",
+            problemTitle: problemTitle,
+          });
+        };
+
+        const onReceiveInvite = (data) => {
+          console.log("Received invite:", data);
+
+          // Normalize and structure the invitation data
+          const newInvite = {
+            id: Date.now(), // Unique identifier for this invite
+            title: data.title || "Untitled Problem", // Fallback title
+            note: data.note || "Would you like to join this problem-solving session?",
+            sender: data.sender || "Anonymous", // Fallback sender name
+            senderId: data.senderId,
+            timestamp: new Date().toISOString(),
+            problemId: data.problemId,
+            status: "pending", // Initial invite status
+          };
+
+          // Store invite in history for tracking
+          setReceivedInvites((prev) => [...prev, newInvite]);
+
+          // Queue management with FIFO behavior
+          setInviteQueue((prev) => {
+            const newQueue = [...prev, newInvite];
+            // Show immediately if no other invite is displayed
+            if (!currentInvite) {
+              setCurrentInvite(newInvite);
+              setShowInvitePopup(true);
+            }
+            return newQueue;
+          });
+
+          // Create and show temporary notification
+          const notificationId = Date.now();
+          setNotifications((prev) => [
+            ...prev,
+            {
+              id: notificationId,
+              message: `New invite from ${newInvite.sender}!`,
+              type: "invite",
+            },
+          ]);
+
+          // Auto-dismiss notification after 5 seconds
+          setTimeout(() => {
+            setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+          }, 5000);
+        };
+
+        // Attach event listeners
+        socket.on("connect", onConnect);
+        socket.on("disconnect", onDisconnect);
+        socket.on("connect_error", onConnectError);
+        socket.on("reconnect_attempt", onReconnectAttempt);
+        socket.on("reconnect", onReconnect);
+        socket.on("reconnect_error", onReconnectError);
+        socket.on("room-joined", onRoomJoined);
+        socket.on("invite-accepted", onInviteAccepted);
+        socket.on("receive-invite", onReceiveInvite);
+
+        // Store cleanup functions
+        cleanupFunctions = [
+          () => socket.off("connect", onConnect),
+          () => socket.off("disconnect", onDisconnect),
+          () => socket.off("connect_error", onConnectError),
+          () => socket.off("reconnect_attempt", onReconnectAttempt),
+          () => socket.off("reconnect", onReconnect),
+          () => socket.off("reconnect_error", onReconnectError),
+          () => socket.off("room-joined", onRoomJoined),
+          () => socket.off("invite-accepted", onInviteAccepted),
+          () => socket.off("receive-invite", onReceiveInvite),
+        ];
+
+      } catch (error) {
+        console.error("Failed to initialize socket due to health check or initial connection error:", error);
+        setNotifications((prev) =>
+          prev.filter((n) => n.id !== "initial-connect" && n.id !== "server-waking-up")
+        );
+        setNotifications((prev) => [
+          ...prev,
+          {
+            id: "initial-error",
+            message: "Could not connect to server. Please try refreshing.",
+            type: "error",
+            dismissible: false,
+          },
+        ]);
+        // If an error occurs, ensure socketRef.current is null so subsequent actions don't try to use a non-existent socket.
+        socketRef.current = null; 
+      }
+    };
+
+    initializeSocket();
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("connect_error");
-      socket.off("reconnect_attempt");
-      socket.off("reconnect");
-      socket.off("reconnect_error");      
-      socket.off("receive-invite");
-    };
-  }, [reconnectionAttemptCount]); // Add reconnectionAttemptCount as a dependency
+      // Cleanup: Remove all event listeners and disconnect socket if it exists
+      cleanupFunctions.forEach(fn => fn());
+      if (socketRef.current) {
+        console.log("Disconnecting socket during cleanup.");
+        socketRef.current.disconnect();
+      }
+    };      
+
+  }, [reconnectionAttemptCount, currentInvite]); // Add currentInvite to dependencies to ensure invite queue logic reacts to state changes
 
   /**
    * Scroll Position Management
@@ -746,7 +725,7 @@ export default function App() {
         }
       });
     }
-  }, [showDSAProblems]);
+  }, [showDSAProblems, topicsScrollPosition]);
 
   /**
    * Authentication View
@@ -850,6 +829,7 @@ export default function App() {
         showModal={showModal}
         setShowModal={setShowModal}
         setNotifications={setNotifications}
+        socket={socketRef.current} // Pass the socket instance
       />
     );
   }
@@ -1046,12 +1026,12 @@ export default function App() {
       )}
 
       {/* Collaboration Room */}
-      {activeRoom && (
+      {activeRoom && socketRef.current && (
         <CollaborationRoom
           roomId={activeRoom.roomId}
           problemTitle={activeRoom.problemTitle}
           onLeave={handleLeaveRoom}
-          socket={socket}
+          socket={socketRef.current}
         />
       )}
       <nav className="w-full max-w-5xl py-4 bg-white bg-opacity-90 backdrop-blur-sm border-b border-gray-300 px-8 flex justify-between items-center rounded-lg shadow-sm z-10">
@@ -1120,7 +1100,7 @@ export default function App() {
               <div className="relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur opacity-0 group-hover:opacity-30 transition duration-300" />
-                <ProblemPage onInvite={() => {}} />
+                <ProblemPage onInvite={() => {}} socket={socketRef.current} /> {/* Pass socket */}
               </div>
             </div>
           </div>
@@ -1240,7 +1220,7 @@ function ProblemPage({ onInvite }) {
       sender: "User",
       message: "New problem solving invitation!",
     };
-    socket.emit("send-invite", inviteData);
+    socketRef.current.emit("send-invite", inviteData);
     setShowNotification(true);
     setTimeout(() => setShowNotification(false), 3000);
     if (onInvite) onInvite();
@@ -3605,28 +3585,28 @@ Object.assign(dsaProblemsByTopic, {
 });
 
 const problemDescriptions = {
-  Array:
+  "Array":
     "A collection of elements stored at contiguous memory locations.\n\nSupports random access, making element retrieval efficient (O(1)).\n\nForms the foundation for many algorithms and data structures.",
-  String:
+  "String":
     "A sequence of characters, often used for text processing.\n\nSupports operations like searching, pattern matching, and manipulation.\n\nWidely used in parsing, encoding, and algorithmic challenges.",
   "Hash Table":
     "Stores key-value pairs with near O(1) average lookup and insertion.\n\nUses hashing functions to distribute data across buckets.\n\nCommon in implementing maps, sets, and caching.",
   "Dynamic Programming":
     "A technique to solve problems by breaking them into overlapping subproblems.\n\nUses memoization (top-down) or tabulation (bottom-up).\n\nCommonly used for optimization problems like knapsack, LIS, and DP on trees.",
-  Math: "Includes number theory, modular arithmetic, GCD, and prime-related algorithms.\n\nEssential for cryptography, probability, and combinatorics problems.\n\nProvides mathematical insights for efficient algorithm design.",
-  Sorting:
+  "Math": "Includes number theory, modular arithmetic, GCD, and prime-related algorithms.\n\nEssential for cryptography, probability, and combinatorics problems.\n\nProvides mathematical insights for efficient algorithm design.",
+  "Sorting":
     "Arranges data in a specific order (ascending/descending).\n\nAlgorithms: QuickSort, MergeSort, HeapSort, Counting Sort, etc.\n\nSorting is often a prerequisite for searching and optimization tasks.",
-  Greedy:
+  'Greedy':
     "Builds a solution step by step, always choosing the locally optimal choice.\n\nWorks well for problems like activity selection, Huffman coding, and MST.\n\nNot always optimal, but efficient where it applies.",
   "Depth-First Search":
     "A graph/tree traversal algorithm exploring as far as possible along each branch.\n\nUseful for cycle detection, connected components, and pathfinding.\n\nOften implemented recursively or using a stack.",
   "Binary Search":
     "Efficient searching technique on sorted arrays (O(log n)).\n\nDivides search space into halves at each step.\n\nUsed in problems like finding elements, ranges, or boundaries.",
-  Database:
+  'Database':
     "Deals with queries and operations on structured data.\n\nInvolves SQL/NoSQL and concepts like indexing and joins.\n\nAlgorithms focus on efficient data retrieval and transaction handling.",
-  Matrix:
+  'Matrix':
     "2D representation of data, used in DP, graph problems, and image processing.\n\nSupports operations like rotation, transposition, and multiplication.\n\nCrucial for problems like shortest paths, island counting, and pathfinding.",
-  Tree: "A hierarchical structure with nodes connected by edges.\n\nApplications: file systems, compilers, and databases.\n\nVariants include Binary Tree, AVL, Red-Black Tree, etc.",
+  'Tree': "A hierarchical structure with nodes connected by edges.\n\nApplications: file systems, compilers, and databases.\n\nVariants include Binary Tree, AVL, Red-Black Tree, etc.",
   "Breadth-First Search":
     "Traversal technique exploring nodes level by level.\n\nUses a queue, ensuring shortest path in unweighted graphs.\n\nCommon in shortest-path algorithms and state-space search.",
   "Bit Manipulation":
@@ -3635,24 +3615,24 @@ const problemDescriptions = {
     "Uses two indices moving through a structure to solve problems efficiently.\n\nUseful for searching pairs, sliding windows, and partitioning arrays.\n\nReduces nested loops, optimizing runtime to O(n).",
   "Prefix Sum":
     "Stores cumulative sums to answer range queries efficiently.\n\nUsed in subarray sum, frequency analysis, and dynamic ranges.\n\nOften combined with hashing or DP.",
-  Heap: "Binary heap structure providing O(log n) insertion and removal.\n\nUsed in scheduling, Dijkstra's shortest path, and median finding.\n\nSupports min-heap and max-heap operations.",
-  Simulation:
+  'Heap': "Binary heap structure providing O(log n) insertion and removal.\n\nUsed in scheduling, Dijkstra's shortest path, and median finding.\n\nSupports min-heap and max-heap operations.",
+  'Simulation':
     "Models a process step-by-step as described in the problem statement.\n\nOften involves implementing rules rather than formulas.\n\nUseful for problems like scheduling, traffic flow, or games.",
   "Binary Tree":
     "A tree with at most two children per node.\n\nTraversals: inorder, preorder, postorder.\n\nFoundation for BSTs, heaps, and balanced search trees.",
-  Graph:
+  'Graph':
     "A collection of nodes (vertices) connected by edges.\n\nCan be directed/undirected, weighted/unweighted.\n\nUsed in pathfinding, networking, and dependency resolution.",
-  Stack:
+  'Stack':
     "A linear data structure that follows the Last-In-First-Out (LIFO) principle.\n\nSupports operations like push, pop, and peek in O(1).\n\nWidely used in expression evaluation, recursion, and backtracking.",
-  Counting:
+  'Counting':
     "Involves determining the frequency or number of occurrences of elements.\n\nUseful in problems like majority element, counting inversions, and frequency maps.\n\nOften combined with hashing, arrays, or prefix sums.",
   "Sliding Window":
     "Maintains a window of elements while traversing a sequence.\n\nUsed for subarray/substring problems like maximum sum or unique characters.\n\nReduces time complexity by avoiding re-computation.",
-  Design:
+  'Design':
     "Focuses on building systems, APIs, or data structures from scratch.\n\nRequires understanding of scalability, efficiency, and modularity.\n\nCommon problems: LRU cache, Twitter clone, and custom data structures.",
-  Enumeration:
+  'Enumeration':
     "Involves generating all possible configurations or outcomes.\n\nUseful in combinatorial problems and exhaustive search.\n\nOften combined with pruning or optimization to handle complexity.",
-  Backtracking:
+  'Backtracking':
     "A recursive algorithm that tries all possibilities and backtracks on failure.\n\nUsed in solving puzzles like Sudoku, N-Queens, and word search.\n\nEnsures completeness but may require pruning to improve efficiency.",
   "Union Find":
     "A structure to track connected components in dynamic graphs.\n\nSupports union and find operations with near O(1) using path compression.\n\nCommonly used in Kruskal's MST and connectivity problems.",
@@ -3666,22 +3646,22 @@ const problemDescriptions = {
     "A stack that maintains elements in increasing or decreasing order.\n\nUseful for problems like Next Greater Element and histogram largest area.\n\nReduces time complexity to linear in range query problems.",
   "Segment Tree":
     "A binary tree structure for range queries and updates.\n\nSupports operations like range sum, min, or max in O(log n).\n\nUseful in dynamic interval problems.",
-  Trie: "A tree-like structure used to store strings efficiently.\n\nSupports prefix search, autocomplete, and dictionary problems.\n\nProvides O(m) operations, where m is string length.",
-  Combinatorics:
+  'Trie': "A tree-like structure used to store strings efficiently.\n\nSupports prefix search, autocomplete, and dictionary problems.\n\nProvides O(m) operations, where m is string length.",
+  'Combinatorics':
     "Focuses on counting, arrangements, and probability of outcomes.\n\nUsed in problems involving permutations, combinations, and binomial coefficients.\n\nPlays a major role in probability and optimization algorithms.",
-  Bitmask:
+  'Bitmask':
     "Represents subsets or states using binary representation.\n\nCommon in DP problems like traveling salesman and set covering.\n\nProvides efficient state transitions and memory usage.",
   "Divide and Conquer":
     "Breaks a problem into smaller subproblems, solves recursively, and combines results.\n\nAlgorithms: Merge Sort, Quick Sort, and Binary Search.\n\nImproves efficiency by solving smaller parts independently.",
-  Queue:
+  'Queue':
     "A linear structure following First-In-First-Out (FIFO).\n\nOperations include enqueue and dequeue in O(1).\n\nUsed in BFS, scheduling, and buffering tasks.",
-  Recursion:
+  'Recursion':
     "A function calling itself to solve smaller instances of a problem.\n\nSimplifies code for problems with repetitive substructure.\n\nOften paired with backtracking, DP, and divide and conquer.",
-  Geometry:
+  "Geometry":
     "Involves algorithms for shapes, distances, and coordinates.\n\nUsed in convex hull, line sweep, and computational geometry.\n\nApplications include graphics, GIS, and robotics.",
   "Binary Indexed Tree":
     "A data structure for cumulative frequency/range queries.\n\nSupports updates and prefix queries in O(log n).\n\nMore space-efficient compared to segment trees.",
-  Memoization:
+  "Memoization":
     "A technique to store results of expensive function calls.\n\nPrevents redundant computation in recursive solutions.\n\nCommonly used in dynamic programming for optimization.",
   "Hash Function":
     "Maps input data of arbitrary size to a fixed-size output.\n\nEssential for hashing, cryptography, and data indexing.\n\nA good hash function minimizes collisions.",
@@ -3697,29 +3677,29 @@ const problemDescriptions = {
     "A hash function optimized for substrings.\n\nEnables efficient string matching in algorithms like Rabin-Karp.\n\nReduces recomputation by updating hash with sliding windows.",
   "Game Theory":
     "Studies strategies in competitive scenarios.\n\nCommon in problems like Nim game and Grundy numbers.\n\nHelps analyze win/lose positions in two-player games.",
-  Interactive:
+  "Interactive":
     "Involves real-time communication with the problem environment.\n\nRequires adaptive algorithms to handle dynamic input.\n\nCommon in coding contests with judge interaction.",
   "Data Stream":
     "Deals with continuous input where storage is limited.\n\nAlgorithms must work in real-time with partial data.\n\nUsed in monitoring, analytics, and streaming platforms.",
   "Monotonic Queue":
     "A queue that maintains elements in increasing or decreasing order.\n\nUseful in sliding window maximum/minimum problems.\n\nEnsures efficient O(n) complexity in range queries.",
-  Brainteaser:
+  "Brainteaser":
     "Logic-based puzzles requiring creative problem-solving.\n\nOften simpler in coding but tricky conceptually.\n\nTests mathematical reasoning and pattern recognition.",
   "Doubly-Linked List":
     "A linked list with pointers to both previous and next nodes.\n\nAllows bidirectional traversal and efficient insertion/deletion.\n\nForms the basis of LRU caches and deque implementations.",
-  Randomized:
+  "Randomized":
     "Algorithms that use randomness for efficiency or simplicity.\n\nExamples include randomized quicksort and hashing.\n\nUseful in probabilistic algorithms and Monte Carlo simulations.",
   "Merge Sort":
     "A divide and conquer sorting algorithm.\n\nGuarantees O(n log n) time complexity in all cases.\n\nStable sort, widely used in external sorting.",
   "Counting Sort":
     "A non-comparison-based sorting algorithm.\n\nWorks by counting occurrences of each element.\n\nEfficient for small ranges but not for large diverse data.",
-  Iterator:
+  "Iterator":
     "An object for sequential traversal of a container.\n\nAbstracts away implementation details of data structures.\n\nCommon in collections and custom data structures.",
-  Concurrency:
+  "Concurrency":
     "Running multiple computations simultaneously.\n\nRequires handling of synchronization and shared resources.\n\nImportant in multi-threading, parallelism, and distributed systems.",
-  Probability:
+  "Probability":
     "Deals with uncertainty, randomness, and data analysis.\n\nUsed in randomized algorithms, machine learning, and simulations.\n\nHelps in expectation-based problem solving.",
-  Quickselect:
+  "Quickselect":
     "An algorithm to find the k-th smallest element in an array.\n\nBased on the partitioning logic of quicksort.\n\nAverage case O(n), worst case O(n²).",
   "Suffix Array":
     "A sorted array of all suffixes of a string.\n\nUseful for pattern matching and string processing.\n\nProvides efficient solutions for problems like LCP (Longest Common Prefix).",
@@ -3729,7 +3709,7 @@ const problemDescriptions = {
     "A subset of graph edges that connects all vertices with minimum total weight.\n\nAlgorithms: Kruskal's and Prim's.\n\nUsed in network design, clustering, and optimization.",
   "Bucket Sort":
     "A distribution-based sorting algorithm.\n\nDivides elements into buckets, sorts them, and merges.\n\nEfficient for uniformly distributed data.",
-  Shell:
+  "Shell":
     "Problems involving command-line or shell scripting.\n\nFocuses on system-level commands and file operations.\n\nCommon in automation and environment configuration.",
   "Reservoir Sampling":
     "A randomized algorithm for sampling from streaming data.\n\nEnsures equal probability for each element without knowing size in advance.\n\nUseful in big data and streaming applications.",
@@ -4273,7 +4253,7 @@ function DSAProblemDetailPage({
                       const note =
                         document.getElementById("invite-note-input").value;
 
-                      socket.emit("send-invite", {
+                      socketRef.current.emit("send-invite", {
                         title: title || problemInfo.title || "Untitled Problem",
                         note:
                           note ||

@@ -118,32 +118,6 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("user-joined", { userId, username });
   });
 
-  socket.on("code-update", ({ roomId, code, language }) => {
-    socket.to(roomId).emit("code-update", { code, language });
-  });
-
-  socket.on("send-message", ({ roomId, message, username }) => {
-    io.to(roomId).emit("room-message", {
-      message,
-      username,
-      timestamp: new Date().toISOString(),
-    });
-  });
-
-  socket.on("leave-room", ({ roomId, userId }) => {
-    if (rooms.has(roomId)) {
-      const room = rooms.get(roomId);
-      room.delete(userId);
-
-      if (room.size === 0) {
-        rooms.delete(roomId);
-      }
-
-      socket.to(roomId).emit("user-left", { userId });
-    }
-    socket.leave(roomId);
-  });
-
   socket.on("accept-invite", ({ inviteId, senderId, title }) => {
     console.log(`Processing invite acceptance for invite ${inviteId}`);
 
