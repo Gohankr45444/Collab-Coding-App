@@ -5,8 +5,20 @@
  */
 
 const express = require("express");
+const cors = require("cors");
 const app = express();
 const http = require("http").createServer(app);
+
+app.use(
+  cors({
+    origin: [
+      "https://collab-coding-app-frontend.onrender.com",
+      "https://collab-coding-app-c-runner-backend.onrender.com",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST"],
+  })
+);
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
