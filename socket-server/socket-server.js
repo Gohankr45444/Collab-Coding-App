@@ -8,6 +8,10 @@ const express = require("express");
 const app = express();
 const http = require("http").createServer(app);
 
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 // Configure Socket.IO with CORS settings to allow cross-origin requests
 const { Server } = require("socket.io");
 const io = new Server(http, {

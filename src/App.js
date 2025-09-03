@@ -277,6 +277,9 @@ export default function App() {
   const [inviteQueue, setInviteQueue] = useState([]);             // Queue of pending invites
   const [activeRoom, setActiveRoom] = useState(null);             // Current collaboration room
 
+  // Add a state to track reconnection attempts for better messaging
+  const [reconnectionAttemptCount, setReconnectionAttemptCount] = useState(0);
+
   /**
    * Room Exit Handler
    * Manages the cleanup and state updates when a user leaves a room
@@ -387,6 +390,7 @@ export default function App() {
    * 4. Error handling
    * 5. Notification system
    */
+   
   useEffect(() => {
     /**
      * Connection Lifecycle Handlers
@@ -409,9 +413,30 @@ export default function App() {
      * - Connection state tracking
      * - Event logging
      */
+    
+    // Initial connection message
+    if (!socket.connected) {
+      setNotifications((prev) => [
+      ...prev,
+      { id: "initial-connect", message: "Connecting to server...", type: "info", dismissible: false },
+      ]);
+    }
+    
     socket.on("connect", () => {
       console.log("Connected to server");
       setIsConnected(true);
+      setReconnectionAttemptCount(0); // Reset attempt count on successful connection
+      
+      // Clear any connection-related notifications
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== "initial-connect" && n.id !== "connection-error" && n.id !== "server-waking-up")
+      );
+      
+      // Add a success notification for connection
+      setNotifications((prev) => [
+        ...prev,
+        { id: Date.now(), message: "Successfully connected to server!", type: "success", dismissible: true },
+      ]);      
       
       // Register user in presence system
       socket.emit("user_online", {
@@ -432,6 +457,11 @@ export default function App() {
     socket.on("disconnect", () => {
       console.log("Disconnected from server");
       setIsConnected(false);
+      // Add a persistent notification for disconnection if not immediately reconnecting
+      setNotifications((prev) => [
+        ...prev,
+        { id: "connection-error", message: "Disconnected. Attempting to reconnect...", type: "error", dismissible: false },
+      ]);
     });
 
     /**
@@ -461,16 +491,77 @@ export default function App() {
      */
     socket.on("connect_error", (error) => {
       console.error("Connection error:", error);
+      setReconnectionAttemptCount((prev) => prev + 1);
+      // Remove previous error/waking up messages
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+      );
+
+      let errorMessage = "Connection error. Retrying...";
+      if (reconnectionAttemptCount >= 2) { // After a couple of attempts, suggest server might be waking up
+        errorMessage = "Server might be waking up (Render free-tier). Retrying...";
+      }
+      
       // Add user-friendly error notification to queue
       setNotifications((prev) => [
         ...prev,
         {
-          id: Date.now(),
-          message: "Connection error. Retrying...",
+          id: "connection-error", // Use a consistent ID for this message to update it
+          message: errorMessage,
           type: "error",
+          dismissible: false,
         },
       ]);
     });
+    
+    socket.on("reconnect_attempt", (attemptNumber) => {
+      console.log(`Reconnection attempt ${attemptNumber}`);
+      setReconnectionAttemptCount(attemptNumber);
+
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+      );
+      
+      let reconnectMessage = `Reconnection attempt ${attemptNumber}...`;
+      if (attemptNumber >= 2) {
+        reconnectMessage = `Server waking up... (attempt ${attemptNumber})`;
+      }
+
+      setNotifications((prev) => [
+        ...prev,
+        {
+          id: "server-waking-up", // Consistent ID for this
+          message: reconnectMessage,
+          type: "info",
+          dismissible: false,
+        },
+      ]);
+    });
+    
+    socket.on("reconnect", (attemptNumber) => {
+      console.log(`Reconnected after ${attemptNumber} attempts`);
+      setIsConnected(true);
+      setReconnectionAttemptCount(0);
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+      );
+      setNotifications((prev) => [
+        ...prev,
+        { id: Date.now(), message: `Reconnected!`, type: "success", dismissible: true },
+      ]);
+    });
+    
+    socket.on("reconnect_error", (error) => {
+      console.error("Reconnection error:", error);
+      // Display a more permanent error if all attempts fail
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== "connection-error" && n.id !== "server-waking-up" && n.id !== "initial-connect")
+      );
+      setNotifications((prev) => [
+        ...prev,
+        { id: "final-connection-error", message: "Failed to reconnect. Please refresh the page.", type: "error", dismissible: false },
+      ]);
+    });    
 
     /**
      * Room Management Handlers
@@ -627,9 +718,12 @@ export default function App() {
       socket.off("connect");
       socket.off("disconnect");
       socket.off("connect_error");
+      socket.off("reconnect_attempt");
+      socket.off("reconnect");
+      socket.off("reconnect_error");      
       socket.off("receive-invite");
     };
-  }, []);
+  }, [reconnectionAttemptCount]); // Add reconnectionAttemptCount as a dependency
 
   /**
    * Scroll Position Management
