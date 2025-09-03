@@ -133,341 +133,142 @@ const PYTHON_CMD = process.env.PYTHON_PATH || "python3";
  * - Compilation/Execution commands
  * - Timeouts
  */
+
+// Decide compiled binary extension based on platform
+const EXT = process.platform === "win32" ? "exe" : "out";
+
 const languageConfigs = {
-  /**
-   * Python Language Configuration
-   * Handles pip package management and Python execution
-   */
+  cpp: {
+    compileCommand: (filename, sandboxDir) => {
+      const outputExe = path.join(sandboxDir, `program.${EXT}`);
+      return `g++ "${filename}" -o "${outputExe}"`;
+    },
+    runCommand: (filename, sandboxDir) => {
+      const outputExe = path.join(sandboxDir, `program.${EXT}`);
+      return `"${outputExe}"`;
+    },
+  },
+  c: {
+    compileCommand: (filename, sandboxDir) => {
+      const outputExe = path.join(sandboxDir, `program.${EXT}`);
+      return `gcc "${filename}" -o "${outputExe}"`;
+    },
+    runCommand: (filename, sandboxDir) => {
+      const outputExe = path.join(sandboxDir, `program.${EXT}`);
+      return `"${outputExe}"`;
+    },
+  },
   python: {
-    install: async (pkg) => {
-      // Install in user mode to avoid permission issues
-      await executeWithTimeout(`${PYTHON_CMD} -m pip install --user ${pkg}`, SECURITY_CONFIG.timeouts.install);
-    },
-    detectDependencies: (code) => {
-      const imports =
-        code.match(
-          /^(?:import|from)\s+([\w\d_\.]+)(?:\s+import\s+[\w\d_\.,\s*]+)?/gm
-        ) || [];
-      const stdLibs = new Set([
-        // Basic Python Standard Library (a more comprehensive list than the original)
-        "os", "sys", "math", "random", "time", "datetime", "string", "re",
-        "json", "collections", "itertools", "functools", "typing", "pathlib",
-        "subprocess", "threading", "multiprocessing", "asyncio", "urllib",
-        "http", "socket", "email", "xml", "html", "csv", "sqlite3", "pickle",
-        "copy", "hashlib", "logging", "argparse", "configparser", "unittest",
-        "decimal", "statistics", "uuid", "base64", "contextlib", "dataclasses",
-        "enum", "io", "glob", "shutil", "inspect", "ast", "traceback", "gc",
-        "weakref", "types", "warnings", "platform", "tempfile", "zipfile",
-        "tarfile", "gzip", "bz2", "lzma", "struct", "array", "heapq", "bisect",
-        "calendar", "textwrap", "gettext", "locale", "signal", "mmap", "queue",
-        "sched", "select", "selectors", "ssl", "ftplib", "poplib", "imaplib",
-        "nntplib", "smtplib", "telnetlib", "hmac", "secrets", "urllib3", "getpass",
-        "curses", "concurrent", "venv", "doctest", "trace", "numbers", "abc",
-        "fnmatch", "fileinput", "shelve", "stat", "asyncore", "asynchat",
-        "webbrowser", "pdb", "distutils", "setuptools", // Common build/dev tools
-      ]);
-
-      const packages = imports.map((imp) => {
-        const match = imp.match(/^from\s+([\w\d_\.]+)|^import\s+([\w\d_\.]+)/);
-        return (match[1] || match[2]).split(".")[0];
-      });
-
-      return [...new Set(packages)].filter((pkg) => !stdLibs.has(pkg));
-    },
-    packageFile: "requirements.txt",
-    virtualenv: {
-      create: async (name) => {
-        await executeWithTimeout(`${PYTHON_CMD} -m venv "${name}"`, SECURITY_CONFIG.timeouts.install);
-      },
-      activate: (name) => {
-        return process.platform === "win32"
-          ? `${name}\\Scripts\\activate.bat`
-          : `. ${name}/bin/activate`;
-      },
-    },
-    timeout: SECURITY_CONFIG.maxExecutionTime, // Default timeout for execution
-    compileCommand: (filename) => `${PYTHON_CMD} "${filename}"`,
+    runCommand: (filename) => `${PYTHON_CMD} "${filename}"`,
   },
-  /**
-   * JavaScript Language Configuration
-   * Handles npm package management and Node.js execution
-   */
   javascript: {
-    install: async (pkg) => {
-      // Install package using npm with exact version
-      await executeWithTimeout(`npm install ${pkg} --save-exact`, SECURITY_CONFIG.timeouts.install);
-    },
-    detectDependencies: (code) => {
-      const imports = [
-        ...(code.match(
-          /(?:require|import)\s*\(?['"]([@\w\d\-\/\.]+)['"]\)?/gm
-        ) || []),
-        ...(code.match(/(?:import\s*{[^}]+}\s*from\s*['"])([^'"]+)/gm) || []),
-        ...(code.match(
-          /(?:const|let|var)\s*{\s*[^}]+}\s*=\s*require\(['"]([^'"]+)['"]\)/gm
-        ) || []),
-      ];
-
-      const stdModules = new Set([
-        // Node.js Built-in Modules
-        "fs", "path", "http", "https", "os", "crypto", "events", "stream",
-        "buffer", "util", "url", "querystring", "zlib", "readline", "net",
-        "dgram", "dns", "tls", "cluster", "child_process", "worker_threads",
-        "assert", "console", "process", "timers", "perf_hooks", "v8",
-        "async_hooks", "module",
-      ]);
-
-      return [
-        ...new Set(
-          imports
-            .map((imp) => {
-              const match = imp.match(/['"]([^'"]+)['"]/);
-              return match ? match[1] : null;
-            })
-            .filter((pkg) => pkg && !stdModules.has(pkg) && !pkg.startsWith("."))
-            .map((pkg) => (pkg.startsWith("@") ? pkg : pkg.split("/")[0]))
-        ),
-      ];
-    },
-    packageFile: "package.json",
-    initPackageJson: {
-      name: "code-runner",
-      version: "1.0.0",
-      private: true,
-      type: "module",
-    },
-    timeout: SECURITY_CONFIG.maxExecutionTime, // Default timeout for execution
-    compileCommand: (filename) => `node "${filename}"`,
+    runCommand: (filename) => `node "${filename}"`,
   },
-  /**
-   * Java Language Configuration
-   * Handles Java compilation and execution. Assumes Maven is installed for dependencies.
-   */
   java: {
-    install: async (pkg) => {
-      const [group, artifact, version] = pkg.split(":");
-      // Assumes Maven is installed and accessible in PATH
-      await executeWithTimeout(
-        `mvn dependency:get -DgroupId=${group} -DartifactId=${artifact} -Dversion=${version}`,
-        SECURITY_CONFIG.timeouts.install
-      );
-    },
-    detectDependencies: (code) => {
-      const imports = code.match(/import\s+([a-zA-Z0-9_.]+)\s*;/g) || [];
-      const stdPackages = new Set([
-        // Core Java Packages (more comprehensive list)
-        "java.lang", "java.io", "java.util", "java.net", "java.text", "java.math",
-        "java.time", "java.sql", "java.security", "java.nio", "java.awt",
-        "javax.swing", "java.beans", "java.rmi", "javax.crypto", "javax.imageio",
-        "javax.sound", "javax.xml", "javax.sql", "javax.naming", "javax.management",
-        "javax.script", "javax.tools", "javax.annotation", "javax.print",
-        // Jakarta EE (formerly javax)
-        "jakarta.servlet", "jakarta.ejb", "jakarta.persistence", "jakarta.ws.rs",
-        "jakarta.mail", "jakarta.json", "jakarta.validation", "jakarta.batch",
-        "jakarta.faces", "jakarta.enterprise", "jakarta.interceptor",
-        // JavaFX
-        "javafx.application", "javafx.scene", "javafx.stage", "javafx.fxml",
-        "javafx.controls", "javafx.graphics", "javafx.media", "javafx.web",
-        // Some common third-party libs usually not managed by 'import' directly like this (but included for completeness if they were)
-        "org.junit", "org.springframework", "com.google.gson", "com.fasterxml.jackson",
-      ]);
-
-      return imports
-        .map((imp) => imp.match(/import\s+([a-zA-Z0-9_\.]+);/)[1].split(".")[0])
-        .filter((pkg) => !stdPackages.has(pkg));
+    compileCommand: (filename, sandboxDir) => `javac "${filename}"`,
+    runCommand: (filename, sandboxDir) => {
+      const className = path.basename(filename, ".java");
+      return `java -cp "${sandboxDir}" ${className}`;
     },
     detectClassName: (code) => {
-      const classMatch = code.match(/public\s+class\s+(\w+)/);
-      if (!classMatch) {
-        throw new Error("No public class found in the Java code");
-      }
-      return classMatch[1];
-    },
-    packageFile: "pom.xml", // For Maven projects
-    compileCommand: (filename) => {
-      const className = path.basename(filename, ".java"); // Get class name from filename
-      return [
-        `javac "${filename}"`,
-        `java -cp "${path.dirname(filename)}" ${className}`,
-      ];
-    },
-    timeout: {
-      compile: SECURITY_CONFIG.timeouts.compilation,
-      run: SECURITY_CONFIG.timeouts.execution,
-    },
-  },
-  /**
-   * C++ Language Configuration
-   * Handles C++ compilation and execution. Strictly enforces standard headers only.
-   */
-  cpp: {
-    install: async (pkg) => {
-      console.log(`C++ relies on system-installed libraries. Package "${pkg}" cannot be installed via this method.`);
-      // For more advanced setups, you might integrate vcpkg or Conan here.
-      throw new Error(`C++ packages are not supported for automatic installation.`);
-    },
-    detectDependencies: (code) => {
-      // For C++, we're being very strict and only allowing standard headers.
-      // This function will throw if a non-standard header is detected.
-      const includes = code.match(/#include\s*<([^>]+)>/g) || [];
-      const stdHeaders = new Set([
-        "iostream", "string", "vector", "map", "set", "queue", "stack", "deque",
-        "list", "array", "algorithm", "memory", "functional", "chrono", "thread",
-        "mutex", "condition_variable", "future", "random", "regex", "filesystem",
-        "iterator", "numeric", "utility", "tuple", "type_traits", "exception",
-        "stdexcept", "cassert", "cstdlib", "cstring", "cctype", "cmath", "ctime",
-        "cstdio", "fstream", "sstream", "iomanip", "optional", "variant", "any",
-        "compare", "version", "source_location", "complex", "ratio", "cfloat",
-        "climits", "numbers", "valarray", "bit", "cstddef", "cwchar", "cuchar",
-        "cwctype", "clocale", "csetjmp", "csignal", "shared_mutex", "atomic",
-        "barrier", "latch", "semaphore", "system_error", "charconv", "format",
-        "memory_resource", "execution", "ranges", "span", "coroutine", "concepts",
-        "string_view", "u8string_view", "u16string_view", "u32string_view",
-        "syncstream", "stacktrace", "expected", "generator", "mdspan", "print",
-        "spanstream", "stdfloat", // C++20+ headers
-      ]);
+      // Prefer a public class
+      let match = code.match(/public\s+class\s+(\w+)/);
+      if (match) return match[1];
 
-      const unsupportedHeaders = includes
-        .map((inc) => inc.match(/<([^>]+)>/)[1])
-        .filter((header) => !stdHeaders.has(header));
+      // Otherwise pick the first class
+      match = code.match(/class\s+(\w+)/);
+      if (match) return match[1];
 
-      if (unsupportedHeaders.length > 0) {
-        throw new Error(
-          `Unsupported headers: ${unsupportedHeaders.join(
-            ", "
-          )}. Only standard C++ libraries are supported.`
-        );
-      }
-      return []; // No external dependencies to manage in this model
-    },
-    packageFile: null,
-    compileCommand: (filename, outputExe) => {
-      const output =
-        outputExe ||
-        filename.replace(".cpp", process.platform === "win32" ? ".exe" : ".out");
-      const defaultFlags = "-std=c++17 -Wall -Wextra -O2";
-      const defaultLibs = "-pthread"; // Common for threading
-      return [
-        `g++ ${defaultFlags} "${filename}" -o "${output}" ${defaultLibs}`,
-        process.platform === "win32" ? `"${output}"` : `./${output}`,
-      ];
-    },
-    timeout: {
-      compile: SECURITY_CONFIG.timeouts.compilation,
-      run: SECURITY_CONFIG.timeouts.execution,
-    },
-  },
-  /**
-   * C Language Configuration
-   * Handles C compilation and execution. Strictly enforces standard headers only.
-   */
-  c: {
-    install: async (pkg) => {
-      console.log(`C relies on system-installed libraries. Package "${pkg}" cannot be installed via this method.`);
-      throw new Error(`C packages are not supported for automatic installation.`);
-    },
-    detectDependencies: (code) => {
-      const includes = code.match(/#include\s*[<"]([^>"]+)[>"]/gm) || [];
-      const stdHeaders = new Set([
-        "stdio.h", "stdlib.h", "string.h", "math.h", "time.h", "ctype.h",
-        "stdbool.h", "stdint.h", "float.h", "limits.h", "assert.h", "errno.h",
-        "locale.h", "setjmp.h", "signal.h", "stdarg.h", "stddef.h", "sys/types.h",
-        "unistd.h", // POSIX standard, often available
-      ]);
-      const unsupportedHeaders = includes
-        .map((inc) => inc.match(/#include\s*[<"]([^>"]+)[>"]/)[1])
-        .filter((header) => !stdHeaders.has(header));
-
-      if (unsupportedHeaders.length > 0) {
-        throw new Error(
-          `Unsupported headers: ${unsupportedHeaders.join(
-            ", "
-          )}. Only standard C libraries are supported.`
-        );
-      }
-      return [];
-    },
-    packageFile: null,
-    compileCommand: (filename, outputExe) => {
-      const output =
-        outputExe ||
-        filename.replace(".c", process.platform === "win32" ? ".exe" : ".out");
-      const defaultFlags = "-Wall -Wextra -std=c11";
-      const defaultLibs = "-lm"; // Math library is commonly needed
-      return [
-        `gcc ${defaultFlags} "${filename}" -o "${output}" ${defaultLibs}`,
-        process.platform === "win32" ? `"${output}"` : `./${output}`,
-      ];
-    },
-    timeout: {
-      compile: SECURITY_CONFIG.timeouts.compilation,
-      run: SECURITY_CONFIG.timeouts.execution,
+      // Fallback if nothing found
+      return "Main";
     },
   },
 };
 
+
+
 // Helper function to get temporary file path
-function getTempFile(ext) {
-  return path.join(
-    tempDir, // Use the dedicated tempDir
-    `temp_${crypto.randomBytes(8).toString("hex")}.${ext}`
-  );
+/*
+* function getTempFile(ext) {
+*   return path.join(
+*     tempDir, // Use the dedicated tempDir
+*     `temp_${crypto.randomBytes(8).toString("hex")}.${ext}`
+*   );
+* }
+*/
+
+function createTempDir() {
+  const dir = path.join(tempDir, crypto.randomBytes(8).toString("hex"));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 // Helper function to cleanup temporary files
-function cleanup(files) {
-  files.forEach((f) => {
-    if (fs.existsSync(f)) {
-      try {
-        fs.unlinkSync(f);
-      } catch (err) {
-        if (err.code === "EPERM") {
-          // Wait and try again after 500ms
-          setTimeout(() => {
-            try {
-              fs.unlinkSync(f);
-            } catch (e) {
-              console.error(`Failed to cleanup file ${f} after retry:`, e.message);
-            }
-          }, 500);
-        } else {
-          console.error(`Failed to cleanup file ${f}:`, err.message);
-        }
-      }
-    }
-  });
-}
+/*
+* async function cleanup(files) {
+*   for (const f of files) {
+*     try {
+*       await fs.promises.unlink(f);
+*     } catch (err) {
+*       if (err.code === "ENOENT") {
+*         // File already deleted by another process/request → safe to ignore
+*         continue;
+*       }
+*       if (err.code === "EPERM") {
+*         // Retry once after 500ms
+*         await new Promise((resolve) => setTimeout(resolve, 500));
+*         try {
+*           await fs.promises.unlink(f);
+*         } catch (e) {
+*           if (e.code !== "ENOENT") {
+*             console.error(`Failed to cleanup file ${f} after retry:`, e.message);
+*           }
+*         }
+*       } else {
+*         console.error(`Failed to cleanup file ${f}:`, err.message);
+*       }
+*     }
+*   }
+* }
+*/
 
 // Helper function to execute code with timeout
-function executeWithTimeout(command, timeout) {
+function executeWithTimeout(command, timeout, input = "") {
   return new Promise((resolve, reject) => {
-    // Add shell: true for commands that need shell features like piping, wildcards, etc.
-    // However, for security, direct commands are generally preferred.
-    // For this use case, simple commands like `node`, `python3`, `g++` don't strictly require it.
-    // If commands get more complex (e.g., chained with `&&`), `shell: true` might be needed.
-    // For now, keep it simple.
-    const child = exec(command, { timeout, killSignal: 'SIGTERM' }, (error, stdout, stderr) => {
+    // Add maxBuffer to prevent memory explosion from huge outputs
+    const child = exec(command, { timeout, killSignal: "SIGTERM", maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      // Trim very large outputs (safety net)
+      const MAX_OUTPUT = 5000; // character limit
+      if (stdout && stdout.length > MAX_OUTPUT) {
+        stdout = stdout.slice(0, MAX_OUTPUT) + "\n...output truncated...";
+      }
+      if (stderr && stderr.length > MAX_OUTPUT) {
+        stderr = stderr.slice(0, MAX_OUTPUT) + "\n...error output truncated...";
+      }
+
       if (error) {
-        // Include stdout for debugging failed commands, as stderr might be empty.
+        // Include stdout in rejection so compilation/runtime errors aren't lost
         reject(stderr || stdout || error.message);
       } else {
-        resolve(stdout);
+        resolve(stdout || stderr);
       }
     });
 
-    // Optional: Log child process PID for debugging if needed
-    // console.log(`Executing command (PID: ${child.pid}): ${command}`);
+    // Feed input to program if provided (for stdin)
+    if (input) {
+      child.stdin.write(input);
+      child.stdin.end();
+    }
 
-    child.on('exit', (code, signal) => {
-        if (signal === 'SIGTERM') {
-            console.log(`Command terminated by timeout: ${command}`);
-            // If the process was terminated, it might not have fully written all output.
-            // Consider if stdout/stderr captured at the moment of timeout is sufficient.
-            // For now, rely on the error passed to the callback.
-        }
+    // Optional: Debug process exit
+    child.on("exit", (code, signal) => {
+      if (signal === "SIGTERM") {
+        console.log(`Command terminated by timeout: ${command}`);
+      }
     });
   });
 }
+
 
 /**
  * Executes code in a specified programming language with safety measures
@@ -481,67 +282,53 @@ function executeWithTimeout(command, timeout) {
  * @returns {Promise<string>} Execution result containing output
  * @throws {Error} If execution fails, times out, or language is not supported
  */
-async function executeCode(language, code, filename, outputExe = null) {
+async function executeCode(language, code, sandboxDir) {
   const config = languageConfigs[language];
-
   if (!config) {
     throw new Error(`Unsupported language: ${language}`);
   }
 
-  // Step 1: Dependency Management
-  // For C/C++, detectDependencies might throw an error if unsupported headers are found.
-  try {
-    const dependencies = config.detectDependencies(code);
-    const errors = [];
-    for (const dep of dependencies) {
-      try {
-        await config.install(dep);
-      } catch (err) {
-        errors.push(`Failed to install ${dep}: ${err.message}`);
-      }
+  // pick file extension for source file
+  let filename = path.join(
+    sandboxDir,
+    `main.${language === "cpp" ? "cpp" 
+          : language === "c" ? "c" 
+          : language === "java" ? "java" 
+          : language === "javascript" ? "js" 
+          : "py"}`
+  );
+
+  // write source file
+  fs.writeFileSync(filename, code, { mode: 0o644 });
+
+  // Special handling for Java
+  if (language === "java") {
+    let className = config.detectClassName(code);
+
+    // If no class name detected → force "Main"
+    if (!className) {
+      className = "Main";
     }
-    if (errors.length > 0) {
-      throw new Error(errors.join("\n"));
-    }
-  } catch (error) {
-    throw new Error(`Dependency Error: ${error.message}`);
+
+    const javaFile = path.join(sandboxDir, `${className}.java`);
+
+    // Rename file so javac can compile it properly
+    fs.renameSync(filename, javaFile);
+    filename = javaFile;
   }
 
-  // Step 2: Compilation and Execution
-  const command = config.compileCommand(filename, outputExe);
-
-  if (Array.isArray(command)) {
-    // Handle compiled languages (C, C++, Java)
-    const [compileCmd, runCmd] = command;
-
-    const compileTimeout =
-      typeof config.timeout === "object" && config.timeout.compile
-        ? config.timeout.compile
-        : SECURITY_CONFIG.timeouts.compilation;
-    const runTimeout =
-      typeof config.timeout === "object" && config.timeout.run
-        ? config.timeout.run
-        : SECURITY_CONFIG.timeouts.execution;
-
-    try {
-      await executeWithTimeout(compileCmd, compileTimeout); // Compilation phase
-      return await executeWithTimeout(runCmd, runTimeout); // Execution phase
-    } catch (error) {
-      // Differentiate between compilation and runtime errors
-      if (error.includes("error:")) { // Simple heuristic for compilation error
-         throw new Error(`Compilation Error:\n${error}`);
-      }
-      throw new Error(`Runtime Error:\n${error}`);
-    }
-  } else {
-    // Handle interpreted languages (Python, JavaScript)
-    const execTimeout =
-      typeof config.timeout === "number"
-        ? config.timeout
-        : SECURITY_CONFIG.maxExecutionTime;
-    return await executeWithTimeout(command, execTimeout);
+  // compile if needed
+  if (config.compileCommand) {
+    const compileCmd = config.compileCommand(filename, sandboxDir);
+    await executeWithTimeout(compileCmd, SECURITY_CONFIG.timeouts.compilation);
   }
+
+  // run program
+  const runCmd = config.runCommand(filename, sandboxDir);
+  return await executeWithTimeout(runCmd, SECURITY_CONFIG.timeouts.execution);
 }
+
+
 
 /**
  * Generic handler for code execution across all supported languages
@@ -553,78 +340,47 @@ async function executeCode(language, code, filename, outputExe = null) {
  * @param {Object} res - Express response object for sending results
  * @returns {Promise<void>} Sends execution results through response object
  */
-async function handleCodeExecution(language, code, res) {
+async function handleCodeExecution(language, code, res, input = "") {
   if (!code) {
     return res.status(400).json({ error: "No code provided" });
   }
 
-  const config = languageConfigs[language];
-  if (!config) {
-    return res.status(400).json({ error: `Unsupported language: ${language}` });
-  }
-
-  let filename = getTempFile(language); // Create isolated file
-  const filesToCleanup = [filename]; // Track files for cleanup
-
+  const sandboxDir = createTempDir();
   try {
-    // Write code to temporary file with proper permissions
-    fs.writeFileSync(filename, code, { mode: 0o644 });
-
-    // Special handling for Java files: Must match public class name
-    if (language === "java") {
-      const className = config.detectClassName(code); // Throws if no public class
-      const javaFile = path.join(path.dirname(filename), `${className}.java`);
-      fs.renameSync(filename, javaFile);
-      filename = javaFile; // Update filename for execution
-      filesToCleanup[0] = javaFile;
-      filesToCleanup.push(
-        path.join(path.dirname(javaFile), `${className}.class`)
-      ); // Add compiled class file to cleanup
-    } else if (language === "cpp" || language === "c") {
-      const exeExtension = process.platform === "win32" ? "exe" : "out";
-      const outputExe = getTempFile(exeExtension);
-      if (process.platform !== "win32") {
-        filesToCleanup.push(outputExe); // Add executable to cleanup
-        await executeWithTimeout(languageConfigs[language].compileCommand(filename, outputExe)[0], SECURITY_CONFIG.timeouts.compilation);
-        await executeWithTimeout(`chmod +x "${outputExe}"`, 1000); // Grant execute permissions
-        const output = await executeWithTimeout(languageConfigs[language].compileCommand(filename, outputExe)[1], SECURITY_CONFIG.timeouts.execution);
-        return res.json({ output });
-      }
-      else{
-        const output = await executeCode(language, code, filename, outputExe);
-        return res.json({ output });
-      }
-    }
-
-    const output = await executeCode(language, code, filename);
+    const output = await executeCode(language, code, sandboxDir, input);
     res.json({ output });
   } catch (error) {
     console.error(`Execution error for ${language}:`, error);
     res.json({ output: error.message || "An unknown error occurred." });
   } finally {
-    cleanup(filesToCleanup);
+    try {
+      fs.rmSync(sandboxDir, { recursive: true, force: true });
+    } catch (cleanupErr) {
+      console.error("Cleanup failed:", cleanupErr.message);
+    }
   }
 }
 
+
 // --- Language-specific Endpoints ---
 app.post("/run-python", (req, res) =>
-  handleCodeExecution("python", req.body.code, res)
+  handleCodeExecution("python", req.body.code, res, req.body.input || "")
 );
 
 app.post("/run-c", (req, res) =>
-  handleCodeExecution("c", req.body.code, res)
+  handleCodeExecution("c", req.body.code, res, req.body.input || "")
 );
 
 app.post("/run-cpp", (req, res) =>
-  handleCodeExecution("cpp", req.body.code, res)
+  handleCodeExecution("cpp", req.body.code, res, req.body.input || "")
 );
 
 app.post("/run-javascript", (req, res) =>
-  handleCodeExecution("javascript", req.body.code, res)
+  handleCodeExecution("javascript", req.body.code, res, req.body.input || "")
 );
 
 app.post("/run-java", (req, res) =>
-  handleCodeExecution("java", req.body.code, res)
+  handleCodeExecution("java", req.body.code, res, req.body.input || "")
 );
 
 // --- Socket.IO Logic ---
