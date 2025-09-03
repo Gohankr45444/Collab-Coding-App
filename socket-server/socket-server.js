@@ -14,6 +14,7 @@ const io = new Server(http, {
   cors: {
     origin: [
       "https://collab-coding-app-frontend.onrender.com",
+      "https://collab-coding-app-c-runner-backend.onrender.com",
       "http://localhost:3000",
     ],
     methods: ["GET", "POST"], // Allow only GET and POST methods
@@ -188,7 +189,7 @@ io.on("connection", (socket) => {
 
         // Clean up empty rooms
         if (room.users.size === 0) {
-          rooms.delete(roomId);
+          rooms.delete(roomId); //TODO: implement rooms.delete()
         }
       }
       socket.leave(roomId);
