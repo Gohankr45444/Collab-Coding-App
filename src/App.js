@@ -319,13 +319,14 @@ export default function App() {
     
     if (accepted) {
       // Use the roomId provided by the invite object, which comes from the server
-      const roomId = invite.roomId; // <--- Corrected: Use the server-generated roomId
+      const roomId = invite.roomId; //  Corrected: Use the server-generated roomId
+      const problemTitle = invite.title; // Get problemTitle from the invite
       
       // Notify sender of acceptance
       socketRef.current.emit("accept-invite", {
         inviteId: invite.id,
         senderId: invite.senderId,
-        title: invite.title,
+        title: problemTitle,
         roomId: roomId,
       });
 
@@ -334,7 +335,7 @@ export default function App() {
         roomId: roomId,
         userId: socketRef.current.id,
         username: "User",
-        problemTitle: invite.title,
+        problemTitle: problemTitle,
       });
       // Update the status of the invite in the received invites list
       setReceivedInvites((prev) =>
@@ -342,6 +343,21 @@ export default function App() {
           item.id === invite.id ? { ...item, status: "accepted" } : item
         )
       );
+      
+      // --- CRITICAL ADDITION FOR THE RECEIVER ---
+      // Immediately set the activeRoom state on the receiver's side.
+      // This ensures the CollaborationRoom component renders without waiting
+      // for the 'room-joined' event to come back from the server,
+      // which can sometimes have a slight delay or be missed if not handled precisely.
+      setActiveRoom({
+        roomId: roomId,
+        problemTitle: problemTitle,
+        // Initialize participants with just the current user for immediate display.
+        // The 'room-joined' event (which should still fire) will then update
+        // this list with all actual participants.
+        participants: [{ userId: socketRef.current.id, username: "User" }],
+      });
+      
     } else {
       socketRef.current.emit("reject-invite", {
         inviteId: invite.id,
