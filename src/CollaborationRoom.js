@@ -369,7 +369,7 @@ const CollaborationRoom = ({
         {/* Main Content */}
         <div className="flex-1 flex p-4 gap-4 overflow-hidden">
           {/* Left Side - 70% (Code Editor and Terminal) */}
-          <div className="w-[70%] flex flex-col overflow-hidden">
+          <div className="w-[70%] flex flex-col overflow-hidden min-h-0">
             <div className="mb-2 flex justify-between items-center flex-shrink-0">
               <select
                 value={language}
@@ -407,18 +407,18 @@ const CollaborationRoom = ({
               </div>
             </div>
             {/* Code Editor and Terminal Split */}
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 flex gap-2 min-h-0">
               {/* Code Editor - 70% of total space */}
-              <div className="w-[60%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-purple-200/20 overflow-hidden">
+              <div className="w-[60%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-purple-200/20 overflow-y-auto flex flex-col">
                 <textarea
                   value={code}
                   onChange={(e) => handleCodeChange(e.target.value)}
-                  className="h-full w-full bg-transparent text-black-900 font-bold, Fira Mono, Menlo, Monaco, Consolas, monospace p-4 focus:outline-none resize-none"
+                  className="flex-1 w-full bg-transparent text-black-900 font-bold, Fira Mono, Menlo, Monaco, Consolas, monospace p-4 focus:outline-none resize-none"
                   placeholder="Let's crack the code."
                 />
               </div>
               {/* Terminal - 30% of total space */}
-              <div className="w-[40%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-black-200/20 overflow-hidden flex flex-col">
+              <div className="w-[40%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-black-200/20 overflow-hidden flex flex-col min-h-0">
                 <div className="h-8 bg-[#2D2D2D] flex items-center px-4 flex-shrink-0">
                   <span className="text-gray-400 text-sm">Terminal</span>
                 </div>
@@ -442,9 +442,9 @@ const CollaborationRoom = ({
           </div>
 
           {/* Right Side - 30% (Chat and Participants) */}
-          <div className="w-[30%] flex flex-col space-y-4 overflow-hidden">
+          <div className="w-[30%] flex flex-col space-y-4 overflow-hidden min-h-0">
             {/* Participants */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200 flex flex-col overflow-hidden">
+            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200 flex flex-col overflow-hidden min-h-0">
               <h3 className="font-bold text-purple-800 mb-3 flex-shrink-0">Participants</h3>
               <div className="flex-1 overflow-y-auto space-y-2">
                 {participants.map((participant, idx) => (
@@ -462,7 +462,7 @@ const CollaborationRoom = ({
             </div>
 
             {/* Chat */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden">
+            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden min-h-0">
               <div className="p-3 border-b border-purple-100 flex-shrink-0">
                 <h3 className="font-bold text-purple-800">Chat</h3>
               </div>
