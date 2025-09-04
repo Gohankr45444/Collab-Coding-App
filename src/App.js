@@ -618,6 +618,14 @@ export default function App() {
                 problemTitle: problemTitle,
               });
           }
+          
+          // --- CRITICAL ADDITION FOR THE SENDER ---
+          // Set the activeRoom state for the sender too, so the CollaborationRoom renders.
+          setActiveRoom({
+            roomId: roomId,
+            problemTitle: problemTitle,
+            participants: [], // Will be updated by 'room-joined' event
+          });
         };
 
         const onReceiveInvite = (data) => {

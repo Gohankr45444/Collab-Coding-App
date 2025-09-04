@@ -178,9 +178,9 @@ io.on("connection", (socket) => {
         socket.to(roomId).emit("user-left", { userId: userToRemove.userId });
 
         // Clean up empty rooms
-        if (room.users.size === 0) {
-          rooms.delete(roomId); //TODO: implement rooms.delete()
-        }
+        //if (room.users.size === 0) {
+        //  rooms.delete(roomId); //TODO: implement rooms.delete()
+        //}
       }
       socket.leave(roomId);
     }
@@ -230,9 +230,9 @@ io.on("connection", (socket) => {
         room.users.delete(userToRemove);
         socket.to(roomId).emit("user-left", { userId: userToRemove.userId });
 
-        if (room.users.size === 0) {
-          rooms.delete(roomId);
-        }
+        //if (room.users.size === 0) {
+        //  rooms.delete(roomId);
+        //}
       }
     });
   });
