@@ -318,8 +318,9 @@ export default function App() {
     if (!socketRef.current) return; // Ensure socket exists
     
     if (accepted) {
-      // Generate unique room ID for the session
-      const roomId = `room_${invite.id}`;
+      // Use the roomId provided by the invite object, which comes from the server
+      const roomId = invite.roomId; // <--- Corrected: Use the server-generated roomId
+      
       // Notify sender of acceptance
       socketRef.current.emit("accept-invite", {
         inviteId: invite.id,
@@ -417,6 +418,7 @@ export default function App() {
         },
       ]);
       
+
       try {
         // Step 1: Ping the health endpoint to wake up the server
         console.log("Pinging server health endpoint...");
@@ -607,14 +609,15 @@ export default function App() {
 
           // Normalize and structure the invitation data
           const newInvite = {
-            id: Date.now(), // Unique identifier for this invite
+            id: data.id, //  Use the server-generated invite ID
             title: data.title || "Untitled Problem", // Fallback title
             note: data.note || "Would you like to join this problem-solving session?",
             sender: data.sender || "Anonymous", // Fallback sender name
             senderId: data.senderId,
-            timestamp: new Date().toISOString(),
+            timestamp: data.timestamp, // Use the server-generated timestamp
             problemId: data.problemId,
             status: "pending", // Initial invite status
+            roomId: data.roomId, //  CRUCIAL: Store the server-generated roomId
           };
 
           // Store invite in history for tracking
