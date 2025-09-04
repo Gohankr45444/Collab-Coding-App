@@ -96,12 +96,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join-room", ({ roomId, userId, username, problemTitle }) => {
-    console.log(`User ${username} attempting to join room ${roomId}`);
+    console.log(`User ${username} (socket ${socket.id}) attempting to join room ${roomId}`); // Added socket.id to log
 
     socket.join(roomId);
 
     if (!rooms.has(roomId)) {
-      console.log(`Room ${roomId} not found, creating new room`);
+      console.warn(`WARNING: Room ${roomId} not found during join for socket ${socket.id}. Creating a new room. This indicates a prior unexpected room removal.`); // Changed to warn
       rooms.set(roomId, {
         users: new Set(),
         problemTitle: problemTitle,
@@ -111,23 +111,39 @@ io.on("connection", (socket) => {
     }
 
     const room = rooms.get(roomId);
-    const userInfo = { userId, username, socketId: socket.id };
-    room.users.add(userInfo);
+    const userInfo = { userId: socket.id, username, socketId: socket.id }; // Use socket.id as primary identifier for in-room user management
+    
+    // Check if a user with this *socket.id* is already in the room's user list
+    // This is important if a socket disconnects and reconnects rapidly.
+    const existingUserInRoom = Array.from(room.users).find(u => u.socketId === socket.id);
 
-    console.log(
-      `User ${username} joined room ${roomId}. Current users:`,
-      Array.from(room.users).map((u) => u.username)
-    );
+
+    if (!existingUserInRoom) {
+      room.users.add(userInfo);
+      console.log(`User ${username} (socket ${socket.id}) ADDED to room ${roomId}.`);
+    } else {
+      // Update existing user's details if necessary (e.g., username might change)
+      // For now, just log that they were already there.
+      console.log(`User ${username} (socket ${socket.id}) already present in room ${roomId}. Updating.`);
+      // If you had more complex user objects, you might update properties here
+      // e.g., existingUserInRoom.username = username;
+    }
 
     const users = Array.from(room.users);
+    console.log(
+      `User ${username} (socket ${socket.id}) joined room ${roomId}. Current users in room:`,
+      users.map((u) => u.username + "(" + u.socketId + ")") // Log socket IDs for debugging
+    );
+
     io.to(roomId).emit("room-joined", {
       roomId,
-      username,
+      username, // The username of the user who just joined
       problemTitle: room.problemTitle,
-      users,
-    });
+      users, // All current users in the room
+    }); 
 
-    socket.to(roomId).emit("user-joined", { userId, username });
+    // Ensure the *newly joined user's* details are sent to others already in the room
+    socket.to(roomId).emit("user-joined", { userId: userInfo.userId, username: userInfo.username });
   });
 
   socket.on("accept-invite", ({ inviteId, senderId, title }) => {
@@ -164,18 +180,20 @@ io.on("connection", (socket) => {
    * @param {string} params.roomId - Room identifier
    * @param {string} params.userId - User's unique identifier
    */
-  socket.on("leave-room", ({ roomId, userId }) => {
+  socket.on("leave-room", ({ roomId }) => {
     if (rooms.has(roomId)) {
       const room = rooms.get(roomId);
       // Find user by either userId or socket.id for flexibility
       const userToRemove = Array.from(room.users).find(
-        (user) => user.userId === userId || user.socketId === socket.id
+        (user) => user.socketId === socket.id // Always remove by the current socket.id
       );
 
       if (userToRemove) {
         // Remove user from room and notify others
         room.users.delete(userToRemove);
-        socket.to(roomId).emit("user-left", { userId: userToRemove.userId });
+        console.log(`User ${userToRemove.username} (socket ${userToRemove.socketId}) LEFT room ${roomId}. Remaining users: ${room.users.size}`);
+        // Notify others in the room
+        io.to(roomId).emit("user-left", { userId: userToRemove.socketId, username: userToRemove.username });
 
         // Clean up empty rooms
         //if (room.users.size === 0) {
@@ -228,7 +246,9 @@ io.on("connection", (socket) => {
 
       if (userToRemove) {
         room.users.delete(userToRemove);
-        socket.to(roomId).emit("user-left", { userId: userToRemove.userId });
+        console.log(`User ${userToRemove.username} (socket ${userToRemove.socketId}) DISCONNECTED, removed from room ${roomId}. Remaining users: ${room.users.size}`);
+        // Notify others in the room about the disconnection
+        io.to(roomId).emit("user-left", { userId: userToRemove.socketId, username: userToRemove.username });
 
         //if (room.users.size === 0) {
         //  rooms.delete(roomId);

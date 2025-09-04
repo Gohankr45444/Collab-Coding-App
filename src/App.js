@@ -606,7 +606,7 @@ export default function App() {
         };
 
         const onInviteAccepted = (data) => {
-          console.log("Invite accepted:", data);
+          console.log("Invite accepted by receiver:", data); // More descriptive log
           const { roomId, acceptedBy, problemTitle } = data;
 
           // Initialize sender's room participation
@@ -727,10 +727,11 @@ export default function App() {
       if (socketRef.current) {
         console.log("Disconnecting socket during cleanup.");
         socketRef.current.disconnect();
+        socketRef.current = null; // Ensure the ref is cleared
       }
     };      
 
-  }, [reconnectionAttemptCount, currentInvite]); // Add currentInvite to dependencies to ensure invite queue logic reacts to state changes
+  }, [reconnectionAttemptCount]);
 
   /**
    * Scroll Position Management
