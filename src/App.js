@@ -19,7 +19,6 @@ import "./styles/animations.css";
 const SOCKET_SERVER_URL = "https://collab-coding-app-socket-server.onrender.com";
 const HEALTH_CHECK_URL = `${SOCKET_SERVER_URL}/health`; // Assuming a /health endpoint
 
-
 // Initialize socket outside the component, but don't connect immediately
 // We'll manage the connection manually after the health check
 let socket = null; 
@@ -418,7 +417,6 @@ export default function App() {
         },
       ]);
       
-
       try {
         // Step 1: Ping the health endpoint to wake up the server
         console.log("Pinging server health endpoint...");
@@ -433,31 +431,29 @@ export default function App() {
         setNotifications((prev) =>
           prev.filter((n) => n.id !== "initial-connect")
         );
+        
+        const id = "connection-status"; // fixed ID
         setNotifications((prev) => [
-          ...prev,
+          ...prev.filter((n) => n.id !== id),
           {
-            id: Date.now(),
+            id,
             message: "Server responsive. Establishing connection...",
             type: "info",
             dismissible: true,
           },
         ]);
+        
+        setTimeout(() => {
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+        }, 5000);
 
         // Step 2: Initialize and connect Socket.IO only after health check
-        /**
-        * Socket.IO Configuration
-        * Sets up real-time communication with the backend server
-        * - Enables automatic reconnection
-        * - Configures exponential backoff for reconnection attempts
-        * - Limits maximum reconnection attempts
-        */
         socket = io(SOCKET_SERVER_URL, {
           reconnection: true, // Enable auto-reconnection
           reconnectionDelay: 1000, // Initial delay between attempts (1s)
           reconnectionDelayMax: 5000, // Maximum delay between attempts (5s)
           reconnectionAttempts: 5, // Maximum number of reconnection attempts
         });
-        
         socketRef.current = socket; // Store socket in ref
 
         const onConnect = () => {
@@ -477,10 +473,12 @@ export default function App() {
           ]);
 
           // Register user in presence system
-          socket.emit("user_online", {
-            userId: "user-" + Date.now(), // Unique temporary identifier
-            userName: "User", // Default display name
-          });
+          if (socketRef.current) {
+              socketRef.current.emit("user_online", {
+                userId: "user-" + Date.now(), // Unique temporary identifier
+                userName: "User", // Default display name
+              });
+          };
         };
 
         const onDisconnect = () => {
@@ -594,12 +592,14 @@ export default function App() {
           const { roomId, acceptedBy, problemTitle } = data;
 
           // Initialize sender's room participation
-          socket.emit("join-room", {
-            roomId: roomId,
-            userId: socket.id,
-            username: "User",
-            problemTitle: problemTitle,
-          });
+          if (socketRef.current) {
+              socketRef.current.emit("join-room", {
+                roomId: roomId,
+                userId: socketRef.current.id,
+                username: "User",
+                problemTitle: problemTitle,
+              });
+          }
         };
 
         const onReceiveInvite = (data) => {
@@ -647,6 +647,7 @@ export default function App() {
             setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
           }, 5000);
         };
+        
 
         // Attach event listeners
         socket.on("connect", onConnect);
@@ -1156,7 +1157,7 @@ export default function App() {
                         const note = document.querySelector(
                           'textarea[placeholder="Note..."]'
                         ).value;
-                        socket.emit("send-invite", {
+                        socketRef.current.emit("send-invite", {
                           title: title || "Untitled Problem",
                           note:
                             note ||
