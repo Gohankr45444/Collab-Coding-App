@@ -240,6 +240,9 @@ const CollaborationRoom = ({
    *    - Updates UI appropriately
    */
   const runCode = async () => {
+    // Clear previous terminal output before running new code
+    setTerminalOutput([]);
+
     // Initialize execution feedback
     setTerminalOutput((prev) => [
       ...prev,
@@ -382,9 +385,9 @@ const CollaborationRoom = ({
               </div>
             </div>
             {/* Code Editor and Terminal Split */}
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 flex gap-2 h-full">
               {/* Code Editor - 70% of total space */}
-              <div className="w-[60%] rounded-xl bg-[#f9fafb] shadow-lg border border-purple-200/20 overflow-hidden">
+              <div className="w-[60%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-purple-200/20 overflow-hidden">
                 <textarea
                   value={code}
                   onChange={(e) => handleCodeChange(e.target.value)}
@@ -393,11 +396,11 @@ const CollaborationRoom = ({
                 />
               </div>
               {/* Terminal - 30% of total space */}
-              <div className="w-[40%] rounded-xl bg-[#f9fafb] shadow-lg border border-black-200/20 overflow-hidden">
+              <div className="w-[40%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-black-200/20 overflow-hidden flex flex-col">
                 <div className="h-8 bg-[#2D2D2D] flex items-center px-4">
                   <span className="text-gray-400 text-sm">Terminal</span>
                 </div>
-                <div className="w-full h-[calc(100%-2rem)] bg-[#f9fafb] text-black-400 font-bold, Fira Mono, Menlo, Monaco, Consolas, monospace p-4 overflow-auto">
+                <div className="w-full flex-1 bg-[#f9fafb] text-black-400 font-bold, Fira Mono, Menlo, Monaco, Consolas, monospace p-4 overflow-auto">
                   {terminalOutput.map((output, idx) => (
                     <div
                       key={idx}
