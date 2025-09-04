@@ -137,10 +137,22 @@ const CollaborationRoom = ({
        * - Real-time updates
        */
       socket.on("code-output", (data) => {
-        setTerminalOutput((prev) => [
-          ...prev,
-          { type: "output", content: data.output },
-        ]);
+        setTerminalOutput((prev) => {
+          const newOutputDisplay = [];
+          
+          // Add a "Code Executed" command for remote screens
+          newOutputDisplay.push({ type: "command", content: `Remote code executed (${new Date().toLocaleTimeString()})...` });
+
+          if (data.output) {
+            newOutputDisplay.push({ type: "output", content: data.output });
+          }
+
+          if (data.error) {
+            newOutputDisplay.push({ type: "error", content: data.error });
+          }
+
+          return newOutputDisplay; // This REPLACES the entire array for all users
+        });
       });
 
       /**
@@ -248,6 +260,7 @@ const CollaborationRoom = ({
       ...prev,
       { type: "command", content: `Running ${language} code...` },
     ]);
+
     try {
       // Execute code via service
       const response = await fetch(`https://collab-coding-app-c-runner-backend.onrender.com/run-${language}`, {
@@ -259,20 +272,21 @@ const CollaborationRoom = ({
       });
       const data = await response.json();
 
-      // Process and display results
-      if (data.error) {
-        // Handle execution errors
-        setTerminalOutput((prev) => [
-          ...prev,
-          { type: "error", content: data.error },
-        ]);
-      } else {
-        // Display successful execution
-        setTerminalOutput((prev) => [
-          ...prev,
-          { type: "output", content: data.output },
-        ]);
+      // Prepare the final output/error to display locally and broadcast
+      let finalOutput = [];
+
+      if (data.output) {
+        finalOutput.push({ type: "output", content: data.output });
       }
+      if (data.error) {
+        finalOutput.push({ type: "error", content: data.error });
+      }
+
+      // Update local terminal with the "Running..." message and the final result
+      setTerminalOutput((prev) => [
+        { type: "command", content: `Running ${language} code...` }, // Re-add command locally
+        ...finalOutput
+      ]);
 
       // Sync results with room participants
       socket.emit("code-output", {
@@ -281,11 +295,19 @@ const CollaborationRoom = ({
         error: data.error,
       });
     } catch (error) {
-      // Handle system errors
+      const errorMessage = error.message;
+      // Update local terminal for fetch errors
       setTerminalOutput((prev) => [
-        ...prev,
-        { type: "error", content: error.message },
+        { type: "command", content: `Running ${language} code...` },
+        { type: "error", content: errorMessage }
       ]);
+      
+      // Broadcast the fetch error to others as well
+      socket.emit("code-output", {
+        roomId,
+        output: null, // No output in case of fetch error
+        error: errorMessage,
+      });
     }
   };
 
@@ -329,9 +351,9 @@ const CollaborationRoom = ({
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-900/90 to-purple-900/90 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white/95 backdrop-blur-md shadow-2xl rounded-xl w-11/12 h-5/6 flex flex-col border border-purple-100">
+      <div className="bg-white/95 backdrop-blur-md shadow-2xl rounded-xl w-11/12 h-5/6 flex flex-col border border-purple-100 overflow-hidden">
         {/* Header */}
-        <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl flex justify-between items-center">
+        <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl flex justify-between items-center flex-shrink-0">
           <div>
             <h2 className="text-xl font-bold text-white">{problemTitle}</h2>
             <p className="text-sm text-blue-100">Room ID: {roomId}</p>
@@ -345,10 +367,10 @@ const CollaborationRoom = ({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex p-4 gap-4">
+        <div className="flex-1 flex p-4 gap-4 overflow-hidden">
           {/* Left Side - 70% (Code Editor and Terminal) */}
-          <div className="w-[70%] flex flex-col">
-            <div className="mb-2 flex justify-between items-center">
+          <div className="w-[70%] flex flex-col overflow-hidden">
+            <div className="mb-2 flex justify-between items-center flex-shrink-0">
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
@@ -385,7 +407,7 @@ const CollaborationRoom = ({
               </div>
             </div>
             {/* Code Editor and Terminal Split */}
-            <div className="flex-1 flex gap-2 h-full">
+            <div className="flex-1 flex gap-2">
               {/* Code Editor - 70% of total space */}
               <div className="w-[60%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-purple-200/20 overflow-hidden">
                 <textarea
@@ -397,7 +419,7 @@ const CollaborationRoom = ({
               </div>
               {/* Terminal - 30% of total space */}
               <div className="w-[40%] h-full rounded-xl bg-[#f9fafb] shadow-lg border border-black-200/20 overflow-hidden flex flex-col">
-                <div className="h-8 bg-[#2D2D2D] flex items-center px-4">
+                <div className="h-8 bg-[#2D2D2D] flex items-center px-4 flex-shrink-0">
                   <span className="text-gray-400 text-sm">Terminal</span>
                 </div>
                 <div className="w-full flex-1 bg-[#f9fafb] text-black-400 font-bold, Fira Mono, Menlo, Monaco, Consolas, monospace p-4 overflow-auto">
@@ -420,11 +442,11 @@ const CollaborationRoom = ({
           </div>
 
           {/* Right Side - 30% (Chat and Participants) */}
-          <div className="w-[30%] flex flex-col space-y-4">
+          <div className="w-[30%] flex flex-col space-y-4 overflow-hidden">
             {/* Participants */}
-            <div className="h-[30%] bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200">
-              <h3 className="font-bold text-purple-800 mb-3">Participants</h3>
-              <div className="h-[calc(100%-2rem)] overflow-y-auto space-y-2">
+            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200 flex flex-col overflow-hidden">
+              <h3 className="font-bold text-purple-800 mb-3 flex-shrink-0">Participants</h3>
+              <div className="flex-1 overflow-y-auto space-y-2">
                 {participants.map((participant, idx) => (
                   <div
                     key={idx}
@@ -440,8 +462,8 @@ const CollaborationRoom = ({
             </div>
 
             {/* Chat */}
-            <div className="h-[70%] bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200">
-              <div className="p-3 border-b border-purple-100">
+            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden">
+              <div className="p-3 border-b border-purple-100 flex-shrink-0">
                 <h3 className="font-bold text-purple-800">Chat</h3>
               </div>
               <div className="flex-1 p-3 overflow-y-auto space-y-2">
@@ -459,7 +481,7 @@ const CollaborationRoom = ({
                   </div>
                 ))}
               </div>
-              <div className="p-3 border-t border-purple-100">
+              <div className="p-3 border-t border-purple-100 flex-shrink-0">
                 <div className="flex gap-2">
                   <input
                     type="text"
