@@ -442,11 +442,11 @@ const CollaborationRoom = ({
           </div>
 
           {/* Right Side - 30% (Chat and Participants) */}
-          <div className="w-[30%] flex flex-col space-y-4 overflow-hidden min-h-0">
+          <div className="w-[30%] flex flex-col gap-4 overflow-hidden min-h-0">
             {/* Participants */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200 flex flex-col overflow-hidden min-h-0">
+            <div className="flex-grow bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200 flex flex-col overflow-hidden flex-shrink-0" style={{flexBasis: '30%'}}>
               <h3 className="font-bold text-purple-800 mb-3 flex-shrink-0">Participants</h3>
-              <div className="flex-1 overflow-y-auto space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
                 {participants.map((participant, idx) => (
                   <div
                     key={idx}
@@ -462,11 +462,11 @@ const CollaborationRoom = ({
             </div>
 
             {/* Chat */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden min-h-0">
+            <div className="flex-grow-[2] bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden flex-shrink-0" style={{flexBasis: '70%'}}>
               <div className="p-3 border-b border-purple-100 flex-shrink-0">
                 <h3 className="font-bold text-purple-800">Chat</h3>
               </div>
-              <div className="flex-1 p-3 overflow-y-auto space-y-2">
+              <div className="flex-1 p-3 overflow-y-auto space-y-2 min-h-0">
                 {messages.map((msg, idx) => (
                   <div
                     key={idx}
