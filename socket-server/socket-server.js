@@ -94,6 +94,15 @@ io.on("connection", (socket) => {
     // Broadcast to all users except sender
     socket.broadcast.emit("receive-invite", enrichedData);
   });
+  
+
+  // --- Handler for broadcasting code execution output ---
+  socket.on("code-output", ({ roomId, output, error }) => {
+    console.log(`Code execution result received for room ${roomId} from socket ${socket.id}`);
+    // Broadcast the output/error to all *other* clients in the same room
+    socket.to(roomId).emit("code-output", { output, error });
+  });
+
 
   socket.on("join-room", ({ roomId, userId, username, problemTitle }) => {
     console.log(`User ${username} (socket ${socket.id}) attempting to join room ${roomId}`); // Added socket.id to log
@@ -145,6 +154,7 @@ io.on("connection", (socket) => {
     // Ensure the *newly joined user's* details are sent to others already in the room
     socket.to(roomId).emit("user-joined", { userId: userInfo.userId, username: userInfo.username });
   });
+
 
   socket.on("accept-invite", ({ inviteId, senderId, title }) => {
     console.log(`Processing invite acceptance for invite ${inviteId}`);
@@ -204,6 +214,7 @@ io.on("connection", (socket) => {
     }
   });
 
+
   /**
    * Handle real-time code updates
    * Broadcasts code changes to all participants in the room
@@ -216,6 +227,7 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("code-update", { code, language });
   });
 
+
   /**
    * Handle chat messages in collaboration rooms
    * Broadcasts messages to all participants
@@ -224,13 +236,16 @@ io.on("connection", (socket) => {
    * @param {string} params.message - Message content
    * @param {string} params.username - Sender's username
    */
-  socket.on("send-message", ({ roomId, message, username }) => {
+  socket.on("room-message", ({ roomId, message, sender }) => {
+    // This emits to all in the room, including sender, but client handles own display
     io.to(roomId).emit("room-message", {
       message,
-      username,
+      sender, // Use 'sender' to match what the client sends
       timestamp: new Date().toISOString(),
     });
+    console.log(`Chat message from ${sender} in room ${roomId}: "${message}"`);
   });
+
 
   /**
    * Handle socket disconnection
@@ -257,6 +272,7 @@ io.on("connection", (socket) => {
     });
   });
 });
+
 
 /**
  * Start the Socket.IO server
