@@ -732,6 +732,20 @@ export default function App() {
     };      
 
   }, [reconnectionAttemptCount]);
+  
+  
+  // Effect to prevent body scrolling when CollaborationRoom is active
+  useEffect(() => {
+    if (activeRoom) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = ''; // Restore default scroll behavior
+    }
+    // Cleanup function in case the component unmounts while a room is active
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [activeRoom]); // Dependency: activeRoom state, so this runs when room opens/closes
 
   /**
    * Scroll Position Management
