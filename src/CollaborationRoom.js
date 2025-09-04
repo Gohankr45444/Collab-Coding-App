@@ -481,7 +481,7 @@ const CollaborationRoom = ({
                   </div>
                 ))}
               </div>
-              <div className="p-3 border-t border-purple-100 flex-shrink-0">
+              <div className="p-3 border-t border-purple-100">
                 <div className="flex gap-2">
                   <input
                     type="text"
