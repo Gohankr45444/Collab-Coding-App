@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 import os
 from pathlib import Path
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,11 +85,15 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+#   `dj_database_url.config()` tries to read a `DATABASE_URL` environment variable.
+#   If `DATABASE_URL` is set, it uses that to configure PostgreSQL.
+#   If `DATABASE_URL` is *not* set, it defaults to the SQLite setup, allowing continue local development.
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'), # Default to SQLite for local development if DATABASE_URL not set
+        conn_max_age=600
+    )
 }
 
 
