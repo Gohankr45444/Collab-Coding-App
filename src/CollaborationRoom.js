@@ -376,7 +376,7 @@ const CollaborationRoom = ({
                 onChange={(e) => setLanguage(e.target.value)}
                 className="bg-white/80 border border-purple-200 rounded-lg p-2 text-purple-700 font-medium focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
               >
-                <option value="cpp">C</option>
+                <option value="c">C</option>
                 <option value="cpp">C++</option>
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
