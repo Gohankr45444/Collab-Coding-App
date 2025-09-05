@@ -462,7 +462,7 @@ const CollaborationRoom = ({
             </div>
 
             {/* Chat */}
-            <div className="flex-grow-[2] bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden flex-shrink-0" style={{flexBasis: '70%'}}>
+            <div className="flex-grow-[2] bg-white/80 backdrop-blur-sm rounded-xl flex flex-col shadow-lg border border-purple-200 overflow-hidden flex-shrink-0" style={{flexBasis: '60%'}}>
               <div className="p-3 border-b border-purple-100 flex-shrink-0">
                 <h3 className="font-bold text-purple-800">Chat</h3>
               </div>
@@ -481,8 +481,8 @@ const CollaborationRoom = ({
                   </div>
                 ))}
               </div>
-              <div className="p-3 border-t border-purple-100">
-                <div className="flex gap-2">
+              <div className="border-t border-purple-100 flex-shrink-0">
+                <div className="flex gap-2 py-2 px-3">
                   <input
                     type="text"
                     value={newMessage}
