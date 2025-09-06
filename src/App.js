@@ -121,6 +121,31 @@ const registerTailwindAnimations = () => {
 // Register animations if we're in the browser
 registerTailwindAnimations();
 
+
+
+// --- Utility function for retrying fetches ---
+const retryFetch = async (url, options, retries = 5, delay = 2000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) {
+        console.log(`Successfully warmed up ${url} after ${i + 1} attempt(s).`);
+        return response; // Success!
+      } else if (response.status === 503 || response.status === 502) {
+        console.warn(`Attempt ${i + 1} failed for ${url} with status ${response.status}. Retrying in ${delay}ms...`);
+      } else {
+        // For other non-OK statuses, don't retry, just throw an error
+        throw new Error(`Non-retryable status ${response.status} for ${url}`);
+      }
+    } catch (error) {
+      console.warn(`Attempt ${i + 1} failed for ${url} with network error: ${error.message}. Retrying in ${delay}ms...`);
+    }
+    await new Promise(resolve => setTimeout(resolve, delay)); // Wait before retrying
+  }
+  throw new Error(`Failed to warm up ${url} after ${retries} attempts.`); // All retries failed
+};
+
+
 /**
  * DSA Problem Database
  * Organized collection of Data Structures and Algorithms problems
@@ -445,14 +470,18 @@ export default function App() {
       try {
         // --- Step 1: Ping Django Backend for Warm-up ---
         console.log("Pinging Django backend warm-up endpoint...");
-        const djangoWarmupResponse = await fetch(DJANGO_WARMUP_URL);
-
-        if (!djangoWarmupResponse.ok) {
-            // Log a warning, but don't stop execution. Allow Socket.IO to try.
-            console.warn(`Django warm-up failed with status: ${djangoWarmupResponse.status} for ${DJANGO_WARMUP_URL}`);
-        } else {
-            console.log("Django backend warmed up successfully.");
-        }     
+        
+        // Using retryFetch for django backend warmup
+        const djangoWarmupResponse = await retryFetch(
+          DJANGO_WARMUP_URL,
+          {}, // No special options needed for a GET request
+          10, // Number of retries (e.g., 10 attempts)
+          3000 // Delay between retries (e.g., 3 seconds)
+        );
+        
+        // If retryFetch throws, the catch block will handle it.
+        // If it returns, djangoWarmupResponse is guaranteed to be .ok
+        console.log("Django backend warmed up successfully.");    
         
         // --- Step 2: Ping Socket.IO Server Health Endpoint ---
         console.log("Pinging server health endpoint...");
@@ -728,7 +757,7 @@ export default function App() {
           ...prev,
           {
             id: "initial-error",
-            message: "Could not connect to servers. Please try refreshing or check server status.",
+            message: `Could not connect to servers. ${error.message}. Please try refreshing or check server status.`, // Added error message
             type: "error",
             dismissible: false,
           },

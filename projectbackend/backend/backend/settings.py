@@ -57,9 +57,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
- 
-
+    "whitenoise.storage.CompressedManifestStaticFilesStorage",
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -140,7 +138,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
+CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
     # For production on Render
@@ -148,6 +146,15 @@ CORS_ALLOWED_ORIGINS = [
     # For local development
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET', 
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
 ]
 
 CORS_ALLOW_HEADERS = [
@@ -162,13 +169,12 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# If you are using Django Rest Framework with CORS, also check CSRF_TRUSTED_ORIGINS
+# If using Django Rest Framework with CORS, also check CSRF_TRUSTED_ORIGINS
 CSRF_TRUSTED_ORIGINS = [
     "https://collab-coding-app-frontend.onrender.com",
 ]
 
 # For React integration (not for production)
-CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWS_CREDENTIALS = True
 
 
