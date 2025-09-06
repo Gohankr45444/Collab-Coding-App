@@ -15,9 +15,16 @@ import AnimatedBackground from "./components/AnimatedBackground";
 import AnimatedLogo from "./components/AnimatedLogo";
 import "./styles/animations.css";
 
+// Define the base URL for the django server and the health check endpoint
+const DJANGO_BACKEND_URL = "https://collab-coding-app-dinesh.onrender.com";
+const DJANGO_WARMUP_URL = `${DJANGO_BACKEND_URL}/status/health/`;
+
 // Define the base URL for the socket server and the health check endpoint
 const SOCKET_SERVER_URL = "https://collab-coding-app-socket-server.onrender.com";
 const HEALTH_CHECK_URL = `${SOCKET_SERVER_URL}/health`; // Assuming a /health endpoint
+
+// Define the base URL for the c-runner-backend server
+const C_RUNNER_BACKEND_SERVER_URL = "https://collab-coding-app-c-runner-backend.onrender.com";
 
 // Initialize socket outside the component, but don't connect immediately
 // We'll manage the connection manually after the health check
@@ -422,13 +429,13 @@ export default function App() {
      
     let cleanupFunctions = []; // To store event listener cleanup
     
-    const initializeSocket = async () => {
+    const initializeServers = async () => {
       // Show initial connecting message
       setNotifications((prev) => [
         ...prev,
         {
           id: "initial-connect",
-          message: "Warming up server and connecting...",
+          message: "Warming up servers and establishing connections...",
           type: "info",
           dismissible: false,
         },
@@ -436,7 +443,18 @@ export default function App() {
       
 
       try {
-        // Step 1: Ping the health endpoint to wake up the server
+        // --- Step 1: Ping Django Backend for Warm-up ---
+        console.log("Pinging Django backend warm-up endpoint...");
+        const djangoWarmupResponse = await fetch(DJANGO_WARMUP_URL);
+
+        if (!djangoWarmupResponse.ok) {
+            // Log a warning, but don't stop execution. Allow Socket.IO to try.
+            console.warn(`Django warm-up failed with status: ${djangoWarmupResponse.status} for ${DJANGO_WARMUP_URL}`);
+        } else {
+            console.log("Django backend warmed up successfully.");
+        }     
+        
+        // --- Step 2: Ping Socket.IO Server Health Endpoint ---
         console.log("Pinging server health endpoint...");
         const healthResponse = await fetch(HEALTH_CHECK_URL);
 
@@ -445,27 +463,28 @@ export default function App() {
         }
         console.log("Server health check successful. Initializing Socket.IO...");
 
-        // Remove the initial connection message once server is responsive
+        // Remove initial connection message once both servers are responsive
         setNotifications((prev) =>
-          prev.filter((n) => n.id !== "initial-connect")
+            prev.filter((n) => n.id !== "initial-connect")
         );
         
-        const id = "connection-status"; // fixed ID
+        const statusId = "connection-status"; // Use a distinct ID
         setNotifications((prev) => [
-          ...prev.filter((n) => n.id !== id),
+           ...prev.filter((n) => n.id !== statusId), // Clear previous if exists
           {
-            id,
-            message: "Server responsive. Establishing connection...",
+            id: statusId,
+            message: "Servers responsive. Establishing Socket.IO connection...",
             type: "info",
             dismissible: true,
           },
         ]);
         
         setTimeout(() => {
-            setNotifications((prev) => prev.filter((n) => n.id !== id));
+            setNotifications((prev) => prev.filter((n) => n.id !== statusId));
         }, 5000);
 
-        // Step 2: Initialize and connect Socket.IO only after health check
+
+        // Step 3: Initialize and connect Socket.IO only after health check
         socket = io(SOCKET_SERVER_URL, {
           reconnection: true, // Enable auto-reconnection
           reconnectionDelay: 1000, // Initial delay between attempts (1s)
@@ -701,15 +720,15 @@ export default function App() {
         ];
 
       } catch (error) {
-        console.error("Failed to initialize socket due to health check or initial connection error:", error);
+        console.error("Failed to initialize servers or Socket.IO:", error);
         setNotifications((prev) =>
-          prev.filter((n) => n.id !== "initial-connect" && n.id !== "server-waking-up")
+            prev.filter((n) => n.id !== "initial-connect" && n.id !== "server-waking-up" && n.id !== "connection-status")
         );
         setNotifications((prev) => [
           ...prev,
           {
             id: "initial-error",
-            message: "Could not connect to server. Please try refreshing.",
+            message: "Could not connect to servers. Please try refreshing or check server status.",
             type: "error",
             dismissible: false,
           },
@@ -719,7 +738,7 @@ export default function App() {
       }
     };
 
-    initializeSocket();
+    initializeServers();
 
     return () => {
       // Cleanup: Remove all event listeners and disconnect socket if it exists
@@ -4066,7 +4085,7 @@ function DSAProblemDetailPage({
     setLoading(true);
     setOutput("");
     try {
-      const endpoint = `https://collab-coding-app-c-runner-backend.onrender.com/run-${language}`;
+      const endpoint = `${C_RUNNER_BACKEND_SERVER_URL}/run-${language}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
