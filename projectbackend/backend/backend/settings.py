@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-2-j#a)ne=@l=i8zk04@gbugkkvtyxcmje0hm-w5g6^k35vy-e!'
+SECRET_KEY = os.environ.get('DJANGO_SECRET')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -90,7 +90,8 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'), # Default to SQLite for local development if DATABASE_URL not set
-        conn_max_age=600
+        conn_max_age=600,
+        ssl_require=True if os.environ.get('DATABASE_URL') else False
     )
 }
 
