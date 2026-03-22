@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET')
+SECRET_KEY = 'django-insecure-2-j#a)ne=@l=i8zk04@gbugkkvtyxcmje0hm-w5g6^k35vy-e!'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -178,5 +178,3 @@ CSRF_TRUSTED_ORIGINS = [
 
 # For React integration (not for production)
 # CORS_ALLOWS_CREDENTIALS = True
-
-
